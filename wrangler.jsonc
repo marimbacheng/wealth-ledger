@@ -1,0 +1,10 @@
+// Cloudflare Workers 靜態網站設定：只放 dist/ 的靜態檔，不跑任何伺服器程式。
+// 安全標頭在 public/_headers（建置後會在 dist/_headers）。
+{
+  "name": "wealth-ledger",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
