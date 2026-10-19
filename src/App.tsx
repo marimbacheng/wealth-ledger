@@ -10,6 +10,8 @@ import { Holdings } from './ui/pages/Holdings';
 import { Ledger } from './ui/pages/Ledger';
 import { Overview } from './ui/pages/Overview';
 import { Setup } from './ui/pages/Setup';
+import { useSync } from './sync/useSync';
+import { SyncBadge } from './ui/SyncCard';
 
 export interface ImportResult {
   file: string;
@@ -67,6 +69,7 @@ export default function App() {
   }, [updown]);
 
   const report = useMemo(() => buildReport(store, asOf), [store, asOf]);
+  const sync = useSync(store, setStore);
   const update = useCallback((fn: (s: Store) => Store) => setStore((s) => fn(structuredClone(s))), []);
 
   // 匯入要同步回傳結果，所以從 ref 取目前資料、算完再一次 setStore（不能放在 updater 裡，StrictMode 會跑兩次）
@@ -117,13 +120,16 @@ export default function App() {
             {report.anchorDate && `　延續帳起算 ${report.anchorDate}`}　單位 USD
           </div>
         </div>
-        <label className="controls">
-          漲跌色
-          <select value={updown} onChange={(e) => setUpdown(e.target.value)}>
-            <option value="tw">紅漲綠跌</option>
-            <option value="us">綠漲紅跌</option>
-          </select>
-        </label>
+        <div className="controls">
+          <SyncBadge sync={sync} onClick={() => setTab('setup')} />
+          <label className="controls">
+            漲跌色
+            <select value={updown} onChange={(e) => setUpdown(e.target.value)}>
+              <option value="tw">紅漲綠跌</option>
+              <option value="us">綠漲紅跌</option>
+            </select>
+          </label>
+        </div>
       </header>
       {saveFailed && <div className="notice">瀏覽器無法儲存資料（可能是私密瀏覽模式）。關閉分頁前請先到「匯入與設定」下載備份。</div>}
       <nav className="tabs" role="tablist">
@@ -144,7 +150,7 @@ export default function App() {
           {tab === 'holdings' && <Holdings {...props} />}
           {tab === 'dividends' && <Dividends {...props} />}
           {tab === 'ledger' && <Ledger {...props} />}
-          {tab === 'setup' && <Setup {...props} importFiles={importFiles} />}
+          {tab === 'setup' && <Setup {...props} importFiles={importFiles} sync={sync} />}
         </>
       )}
       <div className="footer">資料只儲存在這台裝置的瀏覽器（localStorage），不會上傳。換裝置或清除瀏覽資料前請下載備份。</div>

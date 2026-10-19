@@ -15,6 +15,17 @@
 - 換電腦或換瀏覽器：在「匯入與設定 → 備份與還原」下載備份 JSON，到新的地方還原。
 - 備份檔與 Schwab 匯出檔都已列入 `.gitignore`，不要手動加進 repo。
 
+## 手機、電腦同步（選用）
+
+資料在瀏覽器裡用你的密語加密後，存到你自己的**私人** GitHub repo；GitHub 上只看得到亂碼。
+
+1. 建一個私人 repo（例如 `wealth-ledger-data`）。
+2. GitHub → Settings → Developer settings → Fine-grained tokens → 新增 token：只選這個 repo，Repository permissions 的 Contents 設為 Read and write，到期日一年。
+3. 每台裝置打開網站 →「匯入與設定 → 裝置同步」，填入帳號、repo、token，輸入同一組密語。
+4. 之後打開網站會自動載入最新資料，修改後幾秒內自動上傳；每次同步都會在私人 repo 留下一個 commit，改錯可以回復。
+
+注意：所有裝置要用同一個密語；密語不會上傳，忘記就解不開雲端資料。github.io 網址不支援同步（和其他 GitHub Pages 網站共用網域）。
+
 ## 使用方式
 
 1. 從 Schwab 匯出：Positions、Transactions（日期拉到最早）、Investment Income、Realized Gain/Loss（日期拉到最早）、Balances。
@@ -34,7 +45,13 @@ npm test
 
 `tests/import.real.test.ts` 會讀本機的 `20261015 Schwab 資料/`，資料夾不存在時自動略過。
 
-## 部署到 GitHub Pages
+## 部署到 Cloudflare Pages（建議）
+
+1. 登入 Cloudflare → Workers & Pages → Create → Pages → Connect to Git，授權 GitHub 時只選這個 repo。
+2. Build command：`npm run build`；Build output directory：`dist`；其餘預設。
+3. 之後每次推上 `main` 會自動部署到 `https://<專案名稱>.pages.dev/`。安全標頭在 `public/_headers`。
+
+## 部署到 GitHub Pages（舊）
 
 1. 在 GitHub 建立 repo，推上 `main`。
 2. repo 的 Settings → Pages → Source 選 **GitHub Actions**。

@@ -46,6 +46,21 @@
 - **兩個序列色**：亮色 #006c9d／#c37829、暗色 #0995b2／#c87f2c，dataviz 驗證工具六項全過（前一版的藍／橘換掉以配合新色調）。
 - **技術棧**：Vite + React + TypeScript + Recharts + Vitest。打包後約 600 KB（主要是 Recharts），個人使用可接受。
 
+## 裝置同步與部署
+
+- **同步：私人 GitHub repo（wealth-ledger-data）存一個加密檔，App 透過 GitHub Contents API 自動讀寫**。理由：免費、資料不離開使用者自己的 GitHub 帳號、每次同步都是一個 commit（等於自帶版本紀錄可回復）。
+  - 落選：Google Drive appDataFolder（要設定 OAuth，手機瀏覽器常要重新登入）；Secret Gist（拿到網址就看得到）；Firebase／Supabase（資料交給第三方）；iCloud 手動備份還原（每次都要手動）。
+- **瀏覽器端加密**：密語 → PBKDF2-SHA256 60 萬次 → AES-GCM 256，加密前先 gzip。雲端只有密文；密語不上傳。理由：token 外洩或 repo 被誤設為公開時資料仍讀不到。代價：忘記密語就解不開（可用 Schwab 匯出檔重建，手動紀錄會遺失）。
+- **三方合併（base = 上次同步成功的雲端版本）**：每筆資料只有一邊改就採那邊，兩邊都改採本機；遷移區間逐欄合併。理由：兩台裝置各自新增都保留，刪除也會正確傳播。
+  - 落選：最後寫入者勝（會吃掉另一台的新增）；聯集合併（刪除的資料會被另一台救回來）。
+- **衝突處理**：寫回時帶 sha，被搶先（409）就重讀、重合併、重寫，最多 3 次。解密失敗一律中止，不會覆寫雲端。
+- **比對用排序鍵後的 JSON**：測試發現合併結果欄位順序不同會被誤判為有變更，每次同步都多一個 commit。
+- **github.io 上停用同步**：使用者的 6 個 GitHub Pages 網站共用 marimbacheng.github.io 網域與 localStorage，不在那裡存 token。
+- **改用 Cloudflare Pages（*.pages.dev 獨立網域）**，以 Cloudflare 的 GitHub 連動部署。理由：獨立網域隔離 localStorage；GitHub repo 不需要存任何 Cloudflare 金鑰。
+  - 落選：GitHub Actions + wrangler（要把 Cloudflare API token 放進 GitHub secrets）。
+- **內容安全政策（CSP）**：只允許載入自己的程式與 Google Fonts、只允許連線到 api.github.com；Cloudflare 用 `public/_headers`，HTML 另有 meta 版本。理由：token 存在 localStorage，限制外部腳本與外送連線。
+- **測試**：同步邏輯用記憶體內的假 GitHub API 測（`dev/fakeGithub.ts`，只接受 `test-token`）；另有 `tests/sync.live.test.ts` 用本機 `gh` 登入對真正的 API 測一次（寫 `_selftest/` 後刪除）。瀏覽器內兩台裝置測試用 localhost 與 device-b.localhost 兩個網域模擬。
+
 ## 個人資料現況
 
 - 帳戶資料涵蓋範圍、待補資料等個人資訊放在 `private/資料現況.md`（不進版控）。

@@ -4,7 +4,9 @@ import { DEFAULT_META, metaFor } from '../../domain/securities';
 import { emptyStore, type Store } from '../../domain/types';
 import { TW_POS_HEADER, TW_TXN_HEADER, VALUE_HEADER } from '../../import/tw';
 import { upgrade } from '../../store/persist';
+import type { SyncApi } from '../../sync/useSync';
 import { Card, Notice } from '../components';
+import { SyncCard } from '../SyncCard';
 import { money, qty, today } from '../format';
 
 function download(name: string, text: string, type: string) {
@@ -28,7 +30,7 @@ const TXN_EXAMPLE = [
 const VALUE_EXAMPLE = [VALUE_HEADER.join(','), '2024-05-31,20000.00,5 月對帳單 Ending Account Value', '2024-06-30,20500.00,'].join('\n');
 const POS_EXAMPLE = [TW_POS_HEADER.join(','), '2026-11-30,VOO,VANGUARD S&P 500 ETF,10,5003.00,510.00,', '2026-11-30,KO,COCA-COLA,30,2103.00,72.00,'].join('\n');
 
-export function Setup({ store, report: r, update, importFiles }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]> }) {
+export function Setup({ store, report: r, update, importFiles, sync }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]>; sync: SyncApi }) {
   const [results, setResults] = useState<ImportResult[]>([]);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -65,7 +67,8 @@ export function Setup({ store, report: r, update, importFiles }: PageProps & { i
     file.text().then((text) => {
       try {
         const s = upgrade(JSON.parse(text));
-        if (!window.confirm(`以備份檔取代目前資料？（備份內有 ${s.txns.length} 筆紀錄、${s.snapshots.length} 份持倉快照）`)) return;
+        const cloud = sync.config ? '\n\n同步已啟用：還原後的內容也會同步到雲端與其他裝置。' : '';
+        if (!window.confirm(`以備份檔取代目前資料？（備份內有 ${s.txns.length} 筆紀錄、${s.snapshots.length} 份持倉快照）${cloud}`)) return;
         update(() => s);
         setMsg(['已從備份還原']);
       } catch (e) {
@@ -142,6 +145,10 @@ export function Setup({ store, report: r, update, importFiles }: PageProps & { i
             </ul>
           </details>
         </Card>
+      </div>
+
+      <div className="section">
+        <SyncCard sync={sync} />
       </div>
 
       <div className="grid two">
@@ -424,7 +431,10 @@ export function Setup({ store, report: r, update, importFiles }: PageProps & { i
             <button
               className="danger"
               onClick={() => {
-                if (window.confirm('清除這個瀏覽器裡的所有資料？建議先下載備份。')) update((): Store => emptyStore());
+                const msg = sync.config
+                  ? '同步已啟用：清除後雲端與其他裝置的資料也會一起清空（雲端仍保有版本紀錄可回復）。\n只想清這台裝置，請先「停用這台裝置的同步」。確定清除？'
+                  : '清除這個瀏覽器裡的所有資料？建議先下載備份。';
+                if (window.confirm(msg)) update((): Store => emptyStore());
               }}
             >
               清除所有資料
