@@ -1,4 +1,4 @@
-/* 視覺方向：私人財報。暖紙色底、墨色文字、細線分隔取代卡片框、襯線標題、等寬小標。 */
+/* 視覺方向：私人財報。暖紙色底、墨色文字、細線分隔取代卡片框、無襯線標題、等寬小標。 */
 :root {
   color-scheme: light;
   --page: #f4f1ea;
@@ -17,7 +17,6 @@
   --down: #2e6f4e;
   --grain-opacity: 0.05;
   --font-sans: 'Geist', 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
-  --font-serif: 'Instrument Serif', 'Noto Serif TC', 'Songti TC', serif;
   --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
   font-family: var(--font-sans);
 }
@@ -133,11 +132,10 @@ a {
   color: var(--muted);
 }
 .masthead h1 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: 34px;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  font-size: 32px;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
   margin: 4px 0 6px;
 }
 .masthead .meta {
@@ -205,10 +203,10 @@ a {
   color: var(--muted);
 }
 .section-head h2 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: 24px;
-  line-height: 1.2;
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
   margin: 0;
 }
 .section-head .aside {
@@ -254,9 +252,9 @@ a {
   padding-top: 0;
 }
 .card h2 {
-  font-family: var(--font-serif);
-  font-weight: 500;
-  font-size: 19px;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.01em;
   margin: 0 0 2px;
 }
 .card h3 {
