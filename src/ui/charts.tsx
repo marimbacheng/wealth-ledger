@@ -1,16 +1,30 @@
-import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis } from 'recharts';
+import { ramp, type RampSpec } from './color';
 import { money, pct } from './format';
 
-// 圖表顏色只用驗證過的兩個分類色（series-1 藍、series-2 橘），其餘一律是文字與格線色票。
+// 折線、長條只用驗證過的兩個分類色（series-1 石油藍、series-2 赭黃），其餘是文字與細線色。
 const C = {
   s1: 'var(--series-1)',
   s2: 'var(--series-2)',
-  grid: 'var(--grid)',
-  axis: 'var(--axis)',
+  grid: 'var(--rule)',
+  axis: 'var(--rule)',
   muted: 'var(--muted)',
 };
 const tick = { fill: C.muted, fontSize: 11 };
 const compact = (n: number) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `$${n.toFixed(0)}`);
+
+function useDark(): boolean {
+  const q = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : undefined;
+  const [dark, setDark] = useState(() => q?.matches ?? false);
+  useEffect(() => {
+    if (!q) return;
+    const on = (e: MediaQueryListEvent) => setDark(e.matches);
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
+  }, [q]);
+  return dark;
+}
 
 interface TipProps {
   active?: boolean;
@@ -35,23 +49,76 @@ function Tip({ active, label, payload, extra }: TipProps & { extra?: (p: Record<
   );
 }
 
-// 單一序列水平長條：持股比例、產業分布（類別多，不用圓餅）
-export function WeightBars({ data, label }: { data: { name: string; value: number; weight: number }[]; label: string }) {
-  const h = Math.max(120, data.length * 26 + 30);
-  const rows = data.map((d) => ({ ...d, share: pct(d.weight, 1) }));
+// 漸層環圈圖：依占比排序，一檔（或一個產業）一個色號。
+// 相鄰色號差異小，所以每塊之間留 2px 間隙，旁邊的清單附占比，滑過時清單與色塊互相標示。
+export function GradientDonut(props: {
+  data: { name: string; value: number; weight: number; sub?: string }[];
+  spec: RampSpec;
+  centerLabel: string;
+  centerValue: string;
+}) {
+  const dark = useDark();
+  const data = useMemo(() => [...props.data].sort((a, b) => b.value - a.value), [props.data]);
+  const colors = useMemo(() => ramp(data.length, props.spec, dark ? 'dark' : 'light'), [data.length, props.spec, dark]);
+  const [active, setActive] = useState<number | undefined>(undefined);
+  const hovered = active != null ? data[active] : undefined;
+
   return (
-    <div style={{ width: '100%', height: h }}>
-      <ResponsiveContainer>
-        <BarChart data={rows} layout="vertical" margin={{ top: 0, right: 56, bottom: 0, left: 0 }} barCategoryGap={4}>
-          <CartesianGrid horizontal={false} stroke={C.grid} />
-          <XAxis type="number" tick={tick} tickFormatter={compact} stroke={C.axis} />
-          <YAxis type="category" dataKey="name" tick={{ ...tick, fill: 'var(--text-2)' }} width={110} stroke={C.axis} interval={0} />
-          <Tooltip cursor={{ fill: 'var(--surface-2)' }} content={<Tip extra={(p) => `占比 ${pct(p.weight as number, 1)}`} />} />
-          <Bar dataKey="value" name={label} fill={C.s1} radius={[0, 4, 4, 0]}>
-            <LabelList dataKey="share" position="right" fill="var(--text-2)" fontSize={11} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="donut">
+      <div className="ring">
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              innerRadius="64%"
+              outerRadius="96%"
+              startAngle={90}
+              endAngle={-270}
+              stroke="var(--page)"
+              strokeWidth={2}
+              activeIndex={active}
+              activeShape={(p: unknown) => {
+                const s = p as { outerRadius: number } & Record<string, unknown>;
+                return <Sector {...(s as object)} outerRadius={s.outerRadius + 6} />;
+              }}
+              onMouseEnter={(_, i) => setActive(i)}
+              onMouseLeave={() => setActive(undefined)}
+              isAnimationActive={false}
+            >
+              {data.map((d, i) => (
+                <Cell key={d.name} fill={colors[i]} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="center">
+          {hovered ? (
+            <>
+              <div className="small">{hovered.name}</div>
+              <div className="big">{pct(hovered.weight, 1)}</div>
+              <div className="small">{money(hovered.value, { whole: true })}</div>
+            </>
+          ) : (
+            <>
+              <div className="small">{props.centerLabel}</div>
+              <div className="big">{props.centerValue}</div>
+            </>
+          )}
+        </div>
+      </div>
+      <ul className={`donut-legend ${data.length <= 8 ? 'one' : ''}`}>
+        {data.map((d, i) => (
+          <li key={d.name} className={active === i ? 'on' : ''} onMouseEnter={() => setActive(i)} onMouseLeave={() => setActive(undefined)}>
+            <i style={{ background: colors[i] }} />
+            <span className="n" title={d.sub ?? d.name}>
+              {d.name}
+            </span>
+            <span className="p">{pct(d.weight, 1)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -85,8 +152,8 @@ export function ValueChart({ data }: { data: { date: string; value: number; cont
               width={52}
               domain={[(min: number) => Math.floor((min * 0.9) / 1000) * 1000, (max: number) => Math.ceil((max * 1.05) / 1000) * 1000]}
             />
-            <Tooltip content={<Tip />} cursor={{ stroke: C.axis }} />
-            <Line type="monotone" dataKey="value" name="帳戶總值" stroke={C.s1} strokeWidth={2} dot={{ r: 4, fill: C.s1, stroke: 'var(--surface)', strokeWidth: 2 }} activeDot={{ r: 5 }} />
+            <Tooltip content={<Tip />} cursor={{ stroke: C.muted }} />
+            <Line type="monotone" dataKey="value" name="帳戶總值" stroke={C.s1} strokeWidth={2} dot={{ r: 4, fill: C.s1, stroke: 'var(--page)', strokeWidth: 2 }} activeDot={{ r: 5 }} />
             {hasContrib && <Line type="stepAfter" dataKey="contribution" name="累計淨投入" stroke={C.s2} strokeWidth={2} dot={false} />}
           </LineChart>
         </ResponsiveContainer>
@@ -111,16 +178,16 @@ export function DividendYearChart({ data }: { data: { year: string; net: number;
       </div>
       <div style={{ width: '100%', height: 220 }}>
         <ResponsiveContainer>
-          <BarChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }} barCategoryGap="30%" maxBarSize={56}>
+          <BarChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }} barCategoryGap="30%" maxBarSize={40}>
             <CartesianGrid vertical={false} stroke={C.grid} />
             <XAxis dataKey="year" tick={tick} stroke={C.axis} />
             <YAxis tick={tick} tickFormatter={compact} stroke={C.axis} width={52} />
             <Tooltip
-              cursor={{ fill: 'var(--surface-2)' }}
+              cursor={{ fill: 'var(--soft)' }}
               content={<Tip extra={(p) => `稅前 ${money((p.net as number) + (p.tax as number))}${p.estimated ? '（含估算預扣稅）' : ''}`} />}
             />
-            <Bar dataKey="net" name="稅後淨額" stackId="d" fill={C.s1} stroke="var(--surface)" strokeWidth={2} />
-            <Bar dataKey="tax" name="預扣稅" stackId="d" fill={C.s2} stroke="var(--surface)" strokeWidth={2} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="net" name="稅後淨額" stackId="d" fill={C.s1} stroke="var(--page)" strokeWidth={2} />
+            <Bar dataKey="tax" name="預扣稅" stackId="d" fill={C.s2} stroke="var(--page)" strokeWidth={2} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

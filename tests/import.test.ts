@@ -104,6 +104,26 @@ describe('Schwab 匯入（合成資料）', () => {
   });
 });
 
+describe('月底總值範本', () => {
+  it('匯入成資產快照點，重複匯入不重複', async () => {
+    const { mergeBatch } = await import('../src/store/merge');
+    const { emptyStore } = await import('../src/domain/types');
+    const csv = '日期,帳戶總值,備註\n2024-05-31,"$20,000.00",五月\n2024-06-30,20500,\n壞掉,1,\n';
+    const b = importText(csv, 'v.csv');
+    expect(b.kind).toBe('value-points');
+    expect(b.valuePoints).toEqual([
+      { date: '2024-05-31', value: 20000, source: 'statement', note: '五月' },
+      { date: '2024-06-30', value: 20500, source: 'statement', note: '對帳單' },
+    ]);
+    expect(b.warnings).toHaveLength(1);
+    const once = mergeBatch(emptyStore(), b);
+    expect(once.added).toBe(2);
+    const twice = mergeBatch(once.store, b);
+    expect(twice.added).toBe(0);
+    expect(twice.store.valuePoints).toHaveLength(2);
+  });
+});
+
 describe('複委託範本', () => {
   it('買進含手續費、股利拆稅前與預扣、只有稅後標記 netOnly、錯列提醒', () => {
     const b = importText(TW, 'tw.csv');

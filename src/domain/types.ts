@@ -88,7 +88,7 @@ export interface ValuePoint {
   id: string;
   date: string;
   value: number;
-  source: 'snapshot' | 'balances' | 'manual';
+  source: 'snapshot' | 'balances' | 'statement' | 'manual';
   note?: string;
 }
 

@@ -166,6 +166,22 @@ describe('股利', () => {
     expect(ev.find((e) => e.symbol === 'EEE')!.tax).toBeCloseTo(1.2, 2);
   });
 
+  it('動作名稱沒寫再投入，但同期有再投入買進 → 標記為再投入', () => {
+    const s = divStore();
+    s.txns.push(
+      tx({ broker: 'schwab', date: '2026-07-15', type: 'DIV', symbol: 'OOO', amount: 8, rawAction: 'Non-Qualified Div' }),
+      tx({ broker: 'schwab', date: '2026-07-15', type: 'BUY', symbol: 'OOO', qty: 0.1, amount: -5.6, drip: true, rawAction: 'Reinvest Shares' }),
+      tx({ broker: 'schwab', date: '2026-08-14', type: 'DIV', symbol: 'OOO', amount: 8, rawAction: 'Non-Qualified Div' }),
+      tx({ broker: 'schwab', date: '2025-03-14', type: 'DIV', symbol: 'OOO', amount: 7, source: 'schwab-income', rawAction: 'Rev Non-Qualified Div' }),
+    );
+    const ev = buildDividendEvents(s).filter((e) => e.symbol === 'OOO');
+    expect(ev.map((e) => [e.date, e.reinvested])).toEqual([
+      ['2025-03-14', true],
+      ['2026-07-15', true],
+      ['2026-08-14', false],
+    ]);
+  });
+
   it('只有稅後金額的股利標記 netOnly，不計入稅前合計', () => {
     const ev = buildDividendEvents(divStore());
     const f = ev.find((e) => e.symbol === 'FFF')!;

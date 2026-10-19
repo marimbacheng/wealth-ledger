@@ -343,7 +343,7 @@ export function buildReport(store: Store, asOf: string): Report {
   };
 
   // ---------- 資產成長 ----------
-  const prio: Record<string, number> = { manual: 3, balances: 2, snapshot: 1 };
+  const prio: Record<string, number> = { manual: 4, balances: 3, statement: 2, snapshot: 1 };
   const byDate = new Map<string, (typeof store.valuePoints)[number]>();
   for (const p of store.valuePoints) {
     const cur = byDate.get(p.date);

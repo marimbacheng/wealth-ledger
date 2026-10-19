@@ -12,6 +12,38 @@ export function Card(props: { title?: ReactNode; desc?: ReactNode; children: Rea
   );
 }
 
+// 報告式區塊：上緣粗細線 + 編號 + 襯線標題
+export function Section(props: { no?: string; title: ReactNode; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="section">
+      <div className="section-head">
+        {props.no && <span className="no">{props.no}</span>}
+        <h2>{props.title}</h2>
+        {props.aside && <span className="aside">{props.aside}</span>}
+      </div>
+      {props.children}
+    </section>
+  );
+}
+
+// 點線引導的帳目列（像財報的科目與金額）
+export function Leaders({ rows }: { rows: ({ k: ReactNode; v: ReactNode; cls?: string; total?: boolean } | false | undefined)[] }) {
+  return (
+    <ul className="leaders">
+      {rows.filter(Boolean).map((r, i) => {
+        const x = r as { k: ReactNode; v: ReactNode; cls?: string; total?: boolean };
+        return (
+          <li key={i} className={x.total ? 'total' : ''}>
+            <span className="k">{x.k}</span>
+            <span className="dots" />
+            <span className={`v ${x.cls ?? ''}`}>{x.v}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function Kpi(props: { label: ReactNode; value: ReactNode; foot?: ReactNode; hero?: boolean; valueClass?: string }) {
   return (
     <div className="kpi">

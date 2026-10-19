@@ -23,6 +23,9 @@ export const TW_TXN_HEADER = [
 
 export const TW_POS_HEADER = ['日期', '代號', '名稱', '股數', '總成本', '現價', '市值'] as const;
 
+// 從舊對帳單抄下來的月底帳戶總值，用來補資產成長圖
+export const VALUE_HEADER = ['日期', '帳戶總值', '備註'] as const;
+
 const CATEGORY: Record<string, TxnType> = {
   買進: 'BUY',
   買入: 'BUY',
@@ -49,6 +52,29 @@ export function isTwTxnHeader(h: string[]): boolean {
 
 export function isTwPositionHeader(h: string[]): boolean {
   return col(h, '代號') >= 0 && col(h, '股數') >= 0 && col(h, '總成本') >= 0 && col(h, '類別') < 0;
+}
+
+export function isValueHeader(h: string[]): boolean {
+  return col(h, '日期') >= 0 && col(h, '帳戶總值') >= 0 && col(h, '代號') < 0;
+}
+
+export function parseValuePoints(rows: string[][], file: string): ImportBatch {
+  const b = emptyBatch('value-points', file);
+  const h = rows[0];
+  const iDate = col(h, '日期');
+  const iVal = col(h, '帳戶總值');
+  const iNote = col(h, '備註');
+  b.valuePoints = [];
+  rows.slice(1).forEach((r, n) => {
+    const date = parseUsDate(r[iDate] ?? '');
+    const value = parseMoney(r[iVal]);
+    if (!date || value == null) {
+      b.warnings.push(`第 ${n + 2} 列：日期或總值無法辨識，略過`);
+      return;
+    }
+    b.valuePoints!.push({ date, value, source: 'statement', note: (iNote >= 0 && r[iNote]?.trim()) || '對帳單' });
+  });
+  return b;
 }
 
 export function parseTwTransactions(rows: string[][], file: string): ImportBatch {

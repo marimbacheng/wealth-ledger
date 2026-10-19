@@ -1,177 +1,148 @@
 import type { PageProps } from '../../App';
-import { DividendYearChart, ValueChart, WeightBars } from '../charts';
-import { Card, Gain, Kpi, Notice, TotalsBadge } from '../components';
+import { DividendYearChart, GradientDonut, ValueChart } from '../charts';
+import { HOLDING_RAMP, SECTOR_RAMP } from '../color';
+import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components';
 import { money, pct, tone } from '../format';
 
 export function Overview({ report: r, store }: PageProps) {
   const t = r.totals;
   const tr = r.totalReturn;
   const hasTw = t.twCost > 0 || r.dividends.twYtd.count > 0;
+  const schwabCost = t.brokerCost - t.twCost;
   const hasSchwab = t.schwabValue > 0;
   const lastYear = r.dividends.byYear[r.dividends.byYear.length - 1];
   const priceDates = [...new Set(r.holdings.map((h) => h.priceDate).filter(Boolean))].sort();
+  const costGap = t.contCost - t.brokerCost;
 
   return (
     <>
       <Notice title="需要注意" items={r.warnings} />
 
-      <div className="grid">
-        <Card>
-          <Kpi
-            hero
-            label="跨券商累積報酬（已知部分）"
-            value={<Gain value={tr.total} />}
-            foot="延續帳未實現 + 已實現 + 股利淨額 + 利息 − 帳外費用"
-          />
-          <div className="kv" style={{ marginTop: 8 }}>
-            <span>未實現（歷史成本）</span>
-            <span className={tone(tr.unrealized)}>{money(tr.unrealized, { sign: true })}</span>
-            <span>已實現</span>
-            <span className={tone(tr.realized)}>{money(tr.realized, { sign: true })}</span>
-            {Math.abs(tr.pendingMigration) > 0.005 && (
-              <>
-                <span>遷移中（已賣出待買回）</span>
-                <span className={tone(tr.pendingMigration)}>{money(tr.pendingMigration, { sign: true })}</span>
-              </>
-            )}
-            <span>累積股利（稅後）</span>
-            <span>{money(tr.dividendsNet)}</span>
-            {tr.interest !== 0 && (
-              <>
-                <span>利息</span>
-                <span>{money(tr.interest)}</span>
-              </>
-            )}
-            {tr.fees !== 0 && (
-              <>
-                <span>帳外費用</span>
-                <span>{money(-tr.fees)}</span>
-              </>
-            )}
+      <Section no="01" title="累積報酬" aside={priceDates.length ? `價格日 ${priceDates[priceDates.length - 1]}` : undefined}>
+        <div className="split">
+          <div>
+            <Kpi hero label="跨券商累積報酬（已匯入資料的部分）" value={<Gain value={tr.total} />} />
+            <Leaders
+              rows={[
+                { k: '未實現・歷史成本', v: money(tr.unrealized, { sign: true }), cls: tone(tr.unrealized) },
+                { k: '已實現', v: money(tr.realized, { sign: true }), cls: tone(tr.realized) },
+                Math.abs(tr.pendingMigration) > 0.005 && { k: '遷移中（已賣出待買回）', v: money(tr.pendingMigration, { sign: true }), cls: tone(tr.pendingMigration) },
+                { k: '累積股利・稅後', v: money(tr.dividendsNet) },
+                tr.interest !== 0 && { k: '利息', v: money(tr.interest) },
+                tr.fees !== 0 && { k: '帳外費用', v: money(-tr.fees) },
+                { k: '合計', v: money(tr.total, { sign: true }), cls: tone(tr.total), total: true },
+              ]}
+            />
           </div>
-        </Card>
+          <div className="stack">
+            <Kpi label="目前總值" value={money(t.totalValue)} foot={`持股 ${money(t.marketValue)}　現金 ${money(t.schwabCash + t.twCash)}`} />
+            {tr.netContribution != null ? (
+              <Leaders
+                rows={[
+                  { k: '累計淨投入', v: money(tr.netContribution) },
+                  { k: '現值 − 淨投入', v: money(tr.gainByContribution, { sign: true }), cls: tone(tr.gainByContribution) },
+                  { k: '年化報酬（XIRR）', v: pct(tr.xirr) },
+                  { k: '未歸因差額', v: money(tr.residual, { sign: true }), cls: 'muted' },
+                ]}
+              />
+            ) : (
+              <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+                到「設定」填入期初累計淨投入，這裡會加上「現值 − 淨投入」與年化報酬率（XIRR）。
+              </p>
+            )}
+            <Kpi label={`未來 12 個月預估股息・稅後（${r.forecast.label}）`} value={money(r.forecast.net)} foot={`稅前 ${money(r.forecast.gross)}，預扣 ${money(r.forecast.tax)}`} />
+          </div>
+        </div>
+      </Section>
 
-        <Card>
-          <Kpi
-            label="目前總值"
-            value={money(t.totalValue)}
-            foot={`持股市值 ${money(t.marketValue)} · 現金 ${money(t.schwabCash + t.twCash)}${priceDates.length ? ` · 價格日 ${priceDates[priceDates.length - 1]}` : ''}`}
-          />
-          {tr.netContribution != null ? (
-            <div className="kv" style={{ marginTop: 8 }}>
-              <span>累計淨投入</span>
-              <span>{money(tr.netContribution)}</span>
-              <span>現值 − 淨投入</span>
-              <span className={tone(tr.gainByContribution)}>{money(tr.gainByContribution, { sign: true })}</span>
-              <span>年化報酬（XIRR）</span>
-              <span>{pct(tr.xirr)}</span>
-              <span>未歸因差額</span>
-              <span className="muted">{money(tr.residual, { sign: true })}</span>
-            </div>
-          ) : (
-            <p className="desc" style={{ marginTop: 8 }}>
-              在「匯入與設定」填入期初累計淨投入後，這裡會顯示「現值 − 淨投入」與年化報酬率（XIRR）。
+      <Section no="02" title="兩本帳" aside="新成本拿來報稅與對帳，延續成本拿來看投資歷程">
+        <div className="grid">
+          <div>
+            <div className="eyebrow">延續帳・歷史成本</div>
+            <Leaders
+              rows={[
+                { k: '持倉歷史成本', v: money(t.contCost) },
+                { k: '市值', v: money(t.marketValue) },
+                { k: '帳面盈虧', v: <Gain value={t.contGain} base={t.contCost} />, total: true },
+                { k: '成本殖利率・稅後', v: pct(r.yoc.contNet) },
+              ]}
+            />
+          </div>
+          <div>
+            <div className="eyebrow">券商帳・實際成本</div>
+            <Leaders
+              rows={[
+                hasSchwab && { k: 'Schwab 成本', v: money(schwabCost) },
+                hasSchwab && { k: 'Schwab 帳面盈虧', v: <Gain value={t.schwabValue - schwabCost} base={schwabCost} /> },
+                { k: '複委託成本', v: hasTw ? money(t.twCost) : '尚未買進' },
+                { k: '複委託帳面盈虧', v: hasTw ? <Gain value={t.twGain} base={t.twCost} /> : '—', total: true },
+                { k: '成本殖利率・稅後', v: pct(r.yoc.brokerNet) },
+              ]}
+            />
+          </div>
+          <div>
+            <div className="eyebrow">差異</div>
+            <Leaders
+              rows={[
+                { k: '延續成本 − 券商成本', v: money(costGap, { sign: true }) },
+                { k: '遷移配對筆數', v: String(r.migration.matches.length) },
+              ]}
+            />
+            <p className="muted" style={{ fontSize: 12 }}>
+              遷移前兩者相同；在複委託買回後，差額就是 Schwab 時期累積、改由延續帳保留的帳面損益。
             </p>
-          )}
-        </Card>
-
-        <Card>
-          <Kpi
-            label={`預估未來 12 個月股息（${r.forecast.label}）`}
-            value={money(r.forecast.net)}
-            foot={`稅後 · 稅前 ${money(r.forecast.gross)}，預扣 ${money(r.forecast.tax)}`}
-          />
-          <div className="kv" style={{ marginTop: 8 }}>
-            <span>成本殖利率・歷史成本（稅後）</span>
-            <span>{pct(r.yoc.contNet)}</span>
-            <span>成本殖利率・券商成本（稅後）</span>
-            <span>{pct(r.yoc.brokerNet)}</span>
-            <span>近 12 個月實領 ÷ 歷史成本</span>
-            <span>{pct(r.yoc.ttmContNet)}</span>
           </div>
-        </Card>
-      </div>
+        </div>
+      </Section>
 
-      <div className="grid">
-        <Card title="延續帳（歷史成本）" desc="把六年來的原始成本延續到複委託；看投資歷程與成本殖利率用">
-          <div className="kv">
-            <span>持倉歷史成本</span>
-            <span>{money(t.contCost)}</span>
-            <span>市值</span>
-            <span>{money(t.marketValue)}</span>
-            <span className="total">帳面盈虧</span>
-            <span className="total">
-              <Gain value={t.contGain} base={t.contCost} />
-            </span>
+      <Section no="03" title="配置">
+        <div className="grid two">
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>
+              持股比例・依市值
+            </div>
+            <GradientDonut
+              data={r.holdings.map((h) => ({ name: h.symbol, sub: h.name, value: h.marketValue, weight: h.weight }))}
+              spec={HOLDING_RAMP}
+              centerLabel={`${r.holdings.length} 檔持股`}
+              centerValue={money(t.marketValue, { whole: true })}
+            />
           </div>
-        </Card>
-        <Card title="券商帳（實際成本）" desc="各券商帳上的成本；與券商 App 對帳、計算海外所得用">
-          <div className="kv">
-            {hasSchwab && (
-              <>
-                <span>Schwab 成本</span>
-                <span>{money(t.brokerCost - t.twCost)}</span>
-                <span>Schwab 帳面盈虧</span>
-                <span>
-                  <Gain value={t.schwabValue - (t.brokerCost - t.twCost)} base={t.brokerCost - t.twCost} />
-                </span>
-              </>
-            )}
-            <span>複委託成本</span>
-            <span>{hasTw ? money(t.twCost) : '尚未買進'}</span>
-            <span className="total">複委託帳面盈虧</span>
-            <span className="total">{hasTw ? <Gain value={t.twGain} base={t.twCost} /> : '—'}</span>
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>
+              產業分布・含現金
+            </div>
+            <GradientDonut data={r.sectors} spec={SECTOR_RAMP} centerLabel={`${r.sectors.length} 個類別`} centerValue={money(t.totalValue, { whole: true })} />
           </div>
-        </Card>
-        <Card title="股利" desc="合併 Schwab 與複委託">
-          <div className="kv">
-            <span>累積稅前</span>
-            <span>{money(r.dividends.total.gross)}</span>
-            <span>累積預扣稅</span>
-            <span>{money(r.dividends.total.tax)}</span>
-            <span className="total">累積稅後</span>
-            <span className="total">{money(r.dividends.total.net)}</span>
-            <span>{r.dividends.year} 年複委託實領</span>
-            <span>{money(r.dividends.twYtd.net)}</span>
-            {lastYear && (
-              <>
-                <span>{lastYear.year} 年合計實領</span>
-                <span>{money(lastYear.totals.net)}</span>
-              </>
-            )}
-          </div>
-          <div style={{ marginTop: 6 }}>
-            <TotalsBadge t={r.dividends.total} />
-          </div>
-        </Card>
-      </div>
+        </div>
+      </Section>
 
-      <div className="grid two">
-        <Card title="資產成長趨勢" desc={r.valueSeries.length < 3 ? '目前只有少數資產快照；可在「匯入與設定」補登過去對帳單的月底總值。' : undefined}>
-          {r.valueSeries.length > 0 ? <ValueChart data={r.valueSeries} /> : <p className="muted">尚無資產快照</p>}
-        </Card>
-        <Card title="每年股利" desc="稅後淨額 + 預扣稅 = 稅前">
-          <DividendYearChart
-            data={r.dividends.byYear.map((y) => ({
-              year: String(y.year),
-              net: y.totals.net,
-              tax: y.totals.tax,
-              estimated: y.totals.estimatedCount > 0,
-            }))}
-          />
-        </Card>
-      </div>
+      <Section no="04" title="股利" aside={<TotalsBadge t={r.dividends.total} />}>
+        <div className="split">
+          <div>
+            <DividendYearChart
+              data={r.dividends.byYear.map((y) => ({ year: String(y.year), net: y.totals.net, tax: y.totals.tax, estimated: y.totals.estimatedCount > 0 }))}
+            />
+          </div>
+          <div>
+            <Leaders
+              rows={[
+                { k: '累積稅前', v: money(r.dividends.total.gross) },
+                { k: '累積預扣稅', v: money(r.dividends.total.tax) },
+                { k: '累積稅後', v: money(r.dividends.total.net), total: true },
+                lastYear && { k: `${lastYear.year} 年合計實領`, v: money(lastYear.totals.net) },
+                { k: `${r.dividends.year} 年複委託實領`, v: money(r.dividends.twYtd.net) },
+              ]}
+            />
+          </div>
+        </div>
+      </Section>
 
-      <div className="grid two">
-        <Card title="持股比例" desc="依市值">
-          <WeightBars data={r.holdings.map((h) => ({ name: h.symbol, value: h.marketValue, weight: h.weight }))} label="市值" />
-        </Card>
-        <Card title="產業分布" desc="依市值；ETF 單獨列示，可在設定頁調整分類">
-          <WeightBars data={r.sectors} label="市值" />
-        </Card>
-      </div>
+      <Section no="05" title="資產成長" aside={r.valueSeries.length < 3 ? '資料點還很少；可在「設定」補登過去對帳單的月底總值' : undefined}>
+        {r.valueSeries.length > 0 ? <ValueChart data={r.valueSeries} /> : <p className="muted">尚無資產快照</p>}
+      </Section>
 
-      <Card title="資料涵蓋範圍" desc="累積數字只包含已匯入的期間；較早年度請補匯入或手動補登">
+      <Section no="06" title="資料涵蓋範圍" aside="累積數字只包含已匯入的期間">
         <div className="table-wrap">
           <table>
             <thead>
@@ -192,13 +163,14 @@ export function Overview({ report: r, store }: PageProps) {
               {store.snapshots.map((s) => (
                 <tr key={s.id}>
                   <td className="l">{s.broker === 'schwab' ? 'Schwab' : '複委託'} 持倉快照</td>
-                  <td colSpan={2}>{s.date}</td>
+                  <td />
+                  <td>{s.date}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </Card>
+      </Section>
     </>
   );
 }

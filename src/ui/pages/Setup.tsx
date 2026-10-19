@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { ImportResult, PageProps } from '../../App';
 import { DEFAULT_META, metaFor } from '../../domain/securities';
 import { emptyStore, type Store } from '../../domain/types';
-import { TW_POS_HEADER, TW_TXN_HEADER } from '../../import/tw';
+import { TW_POS_HEADER, TW_TXN_HEADER, VALUE_HEADER } from '../../import/tw';
 import { upgrade } from '../../store/persist';
 import { Card, Notice } from '../components';
 import { money, qty, today } from '../format';
@@ -25,6 +25,7 @@ const TXN_EXAMPLE = [
   '2027-01-10,tw,股利,PEP,,,,,,,,20.00,,只知道實收金額',
   '2023-03-15,schwab,股利,JNJ,,,,,,20.00,6.00,,,補登早年資料',
 ].join('\n');
+const VALUE_EXAMPLE = [VALUE_HEADER.join(','), '2024-05-31,20000.00,5 月對帳單 Ending Account Value', '2024-06-30,20500.00,'].join('\n');
 const POS_EXAMPLE = [TW_POS_HEADER.join(','), '2026-11-30,VOO,VANGUARD S&P 500 ETF,10,5003.00,510.00,', '2026-11-30,KO,COCA-COLA,30,2103.00,72.00,'].join('\n');
 
 export function Setup({ store, report: r, update, importFiles }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]> }) {
@@ -252,7 +253,7 @@ export function Setup({ store, report: r, update, importFiles }: PageProps & { i
       </div>
 
       <div className="section">
-        <Card title="資產快照" desc="資產成長趨勢圖的資料點。匯入持倉或餘額時會自動新增；也可以從舊對帳單補登月底總值。">
+        <Card title="資產快照" desc="資產成長趨勢圖的資料點。匯入持倉或餘額時會自動新增；舊對帳單的月底總值可以在這裡逐筆補登，或用「月底總值範本」整批匯入。">
           <div className="row" style={{ marginBottom: 8 }}>
             <label className="field">
               日期
@@ -300,7 +301,7 @@ export function Setup({ store, report: r, update, importFiles }: PageProps & { i
                   <tr key={p.id}>
                     <td className="l">{p.date}</td>
                     <td>{money(p.value)}</td>
-                    <td className="l">{{ manual: '手動', balances: '餘額匯出', snapshot: '持倉匯出' }[p.source]}</td>
+                    <td className="l">{{ manual: '手動', balances: '餘額匯出', snapshot: '持倉匯出', statement: '對帳單' }[p.source]}</td>
                     <td className="l muted">{p.note}</td>
                     <td>
                       <button
@@ -406,6 +407,7 @@ export function Setup({ store, report: r, update, importFiles }: PageProps & { i
           <div className="row">
             <button onClick={() => download('複委託交易範本.csv', '\uFEFF' + TXN_EXAMPLE, 'text/csv')}>下載交易／股利範本</button>
             <button onClick={() => download('複委託庫存範本.csv', '\uFEFF' + POS_EXAMPLE, 'text/csv')}>下載庫存範本（對帳用）</button>
+            <button onClick={() => download('月底總值範本.csv', '\uFEFF' + VALUE_EXAMPLE, 'text/csv')}>下載月底總值範本</button>
           </div>
           <p className="desc" style={{ marginTop: 8 }}>
             類別：買進、賣出、股利、轉入、轉出、入金、出金、費用、利息。股利欄填稅前、預扣稅、稅後任兩個；只知道實收就只填稅後。

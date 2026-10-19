@@ -84,13 +84,17 @@ export function mergeBatch(store: Store, batch: ImportBatch, now = new Date().to
     s.estimates.push(batch.estimates);
   }
 
-  if (batch.valuePoint) {
-    const id = `${batch.valuePoint.source}|${batch.valuePoint.date}`;
+  for (const vp of [...(batch.valuePoint ? [batch.valuePoint] : []), ...(batch.valuePoints ?? [])]) {
+    const id = `${vp.source}|${vp.date}`;
+    const existed = s.valuePoints.find((x) => x.id === id);
     s.valuePoints = s.valuePoints.filter((x) => x.id !== id);
-    s.valuePoints.push({ ...batch.valuePoint, id });
-    s.valuePoints.sort((a, b) => a.date.localeCompare(b.date));
-    if (!batch.snapshot) added++;
+    s.valuePoints.push({ ...vp, id });
+    if (!batch.snapshot) {
+      if (existed && existed.value === vp.value) skipped++;
+      else added++;
+    }
   }
+  s.valuePoints.sort((a, b) => a.date.localeCompare(b.date));
 
   if (batch.coverage) {
     const c = batch.coverage;

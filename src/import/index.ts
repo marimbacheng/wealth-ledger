@@ -8,7 +8,7 @@ import {
   parseRealizedSummary,
   parseTransactions,
 } from './schwab';
-import { isTwPositionHeader, isTwTxnHeader, parseTwPositions, parseTwTransactions } from './tw';
+import { isTwPositionHeader, isTwTxnHeader, isValueHeader, parseTwPositions, parseTwTransactions, parseValuePoints } from './tw';
 
 export { KIND_LABEL, type ImportBatch, type ImportKind } from './batch';
 
@@ -24,6 +24,7 @@ export function importText(text: string, file: string): ImportBatch {
   if (first === 'Date' && rows[0].some((c) => c.trim() === 'Action')) return parseTransactions(rows, file);
   if (rows[0] && isTwTxnHeader(rows[0])) return parseTwTransactions(rows, file);
   if (rows[0] && isTwPositionHeader(rows[0])) return parseTwPositions(rows, file);
+  if (rows[0] && isValueHeader(rows[0])) return parseValuePoints(rows, file);
   const b = emptyBatch('unknown', file);
   b.warnings.push('無法辨識的檔案格式');
   return b;

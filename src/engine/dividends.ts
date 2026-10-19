@@ -45,7 +45,8 @@ function covered(coverage: Coverage[], broker: Broker, date: string): boolean {
   return coverage.some((c) => c.broker === broker && c.kind === 'transactions' && inRange(date, c.from, c.to));
 }
 
-const isReinvest = (raw?: string) => /reinvest|再投入/i.test(raw ?? '');
+// Schwab 動作名稱：Qual Div Reinvest、Reinvest Dividend；投資收益檔的 "Rev Non-Qualified Div" 也是再投入（已用交易紀錄比對確認）
+const isReinvestAction = (raw?: string) => /reinvest|再投入|^rev /i.test(raw ?? '');
 
 // Schwab 交易紀錄與投資收益檔會記到同一筆股利：同代號、金額相同、日期差 7 天內視為同一筆，保留交易紀錄那筆（它有預扣稅）
 function dedupeIncome(divs: Txn[]): Txn[] {
@@ -83,6 +84,11 @@ export function observedRates(events: DividendEvent[]): Record<string, number> {
 export function buildDividendEvents(store: Store): DividendEvent[] {
   const divs = dedupeIncome(store.txns.filter((t) => t.type === 'DIV' && t.symbol));
   const taxes = store.txns.filter((t) => t.type === 'TAX' && t.symbol);
+  const dripBuys = store.txns.filter((t) => t.type === 'BUY' && t.drip && t.symbol);
+  // 動作名稱沒寫再投入（例如 O 的 "Non-Qualified Div"），但幾天內有同代號的再投入買進 → 也算再投入
+  const reinvested = (d: Txn) =>
+    isReinvestAction(d.rawAction) ||
+    dripBuys.some((b) => b.broker === d.broker && b.symbol === d.symbol && daysBetween(d.date, b.date) >= -1 && daysBetween(d.date, b.date) <= 5);
 
   const events: (DividendEvent & { _txn: Txn })[] = divs.map((d) => ({
     _txn: d,
@@ -93,7 +99,7 @@ export function buildDividendEvents(store: Store): DividendEvent[] {
     tax: 0,
     net: d.amount,
     taxStatus: d.netOnly ? 'netOnly' : 'actual',
-    reinvested: isReinvest(d.rawAction),
+    reinvested: reinvested(d),
     source: d.source,
     rawAction: d.rawAction,
   }));

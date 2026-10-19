@@ -108,32 +108,34 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
+      <header className="masthead">
         <div>
+          <div className="eyebrow">Private ledger · Schwab → 複委託</div>
           <h1>跨券商總報酬帳</h1>
-          <div className="sub">
+          <div className="meta">
             資料日 {asOf}
-            {report.anchorDate && ` · 延續帳起算快照 ${report.anchorDate}`} · 金額單位 USD
+            {report.anchorDate && `　延續帳起算 ${report.anchorDate}`}　單位 USD
           </div>
         </div>
-        <label className="sub">
-          漲跌色{' '}
+        <label className="controls">
+          漲跌色
           <select value={updown} onChange={(e) => setUpdown(e.target.value)}>
-            <option value="tw">紅漲綠跌（台灣）</option>
-            <option value="us">綠漲紅跌（美國）</option>
+            <option value="tw">紅漲綠跌</option>
+            <option value="us">綠漲紅跌</option>
           </select>
         </label>
       </header>
       {saveFailed && <div className="notice">瀏覽器無法儲存資料（可能是私密瀏覽模式）。關閉分頁前請先到「匯入與設定」下載備份。</div>}
       <nav className="tabs" role="tablist">
-        {TABS.map((t) => (
+        {TABS.map((t, i) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+            <span className="no">{String(i + 1).padStart(2, '0')}</span>
             {t.label}
           </button>
         ))}
       </nav>
       {empty && tab !== 'setup' ? (
-        <div className="card">
+        <div className="card" style={{ marginTop: 24 }}>
           還沒有資料。請到 <a href="#" onClick={(e) => (e.preventDefault(), setTab('setup'))}>匯入與設定</a> 匯入 Schwab 的匯出檔。
         </div>
       ) : (

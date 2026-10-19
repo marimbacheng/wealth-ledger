@@ -17,6 +17,7 @@ export type ImportKind =
   | 'schwab-balances'
   | 'tw-transactions'
   | 'tw-positions'
+  | 'value-points'
   | 'unknown';
 
 export const KIND_LABEL: Record<ImportKind, string> = {
@@ -28,6 +29,7 @@ export const KIND_LABEL: Record<ImportKind, string> = {
   'schwab-balances': 'Schwab 帳戶餘額',
   'tw-transactions': '複委託交易／股利（範本格式）',
   'tw-positions': '複委託庫存（範本格式）',
+  'value-points': '月底總值（範本格式）',
   unknown: '無法辨識',
 };
 
@@ -40,6 +42,7 @@ export interface ImportBatch {
   realized: Omit<RealizedRecord, 'id'>[];
   estimates?: EstimateSet;
   valuePoint?: Omit<ValuePoint, 'id'>;
+  valuePoints?: Omit<ValuePoint, 'id'>[];
   coverage?: Coverage;
   securities: Record<string, SecurityMeta>;
   warnings: string[];
