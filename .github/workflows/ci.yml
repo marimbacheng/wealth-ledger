@@ -1,0 +1,24 @@
+name: CI
+
+# 只跑測試與建置；部署由 Cloudflare Workers Builds 在推上 main 時自動進行。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 真實資料與真實 GitHub API 的測試在 CI 上會自動略過
+      - run: npm test
+      - run: npm run build

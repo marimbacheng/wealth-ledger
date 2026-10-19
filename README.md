@@ -24,7 +24,7 @@
 3. 每台裝置打開網站 →「匯入與設定 → 裝置同步」，填入帳號、repo、token，輸入同一組密語。
 4. 之後打開網站會自動載入最新資料，修改後幾秒內自動上傳；每次同步都會在私人 repo 留下一個 commit，改錯可以回復。
 
-注意：所有裝置要用同一個密語；密語不會上傳，忘記就解不開雲端資料。github.io 網址不支援同步（和其他 GitHub Pages 網站共用網域）。
+注意：所有裝置要用同一個密語；密語不會上傳，忘記就解不開雲端資料。請用 workers.dev 網址；github.io 網址不支援同步。
 
 ## 使用方式
 
@@ -45,16 +45,13 @@ npm test
 
 `tests/import.real.test.ts` 會讀本機的 `20261015 Schwab 資料/`，資料夾不存在時自動略過。
 
-## 部署到 Cloudflare Pages（建議）
+## 部署（Cloudflare Workers）
 
-1. 登入 Cloudflare → Workers & Pages → Create → Pages → Connect to Git，授權 GitHub 時只選這個 repo。
-2. Build command：`npm run build`；Build output directory：`dist`；其餘預設。
-3. 之後每次推上 `main` 會自動部署到 `https://<專案名稱>.pages.dev/`。安全標頭在 `public/_headers`。
+網站：https://wealth-ledger.marimbacheng.workers.dev
 
-## 部署到 GitHub Pages（舊）
-
-1. 在 GitHub 建立 repo，推上 `main`。
-2. repo 的 Settings → Pages → Source 選 **GitHub Actions**。
-3. 之後每次推上 `main`，`.github/workflows/deploy.yml` 會跑測試、建置並部署到 `https://<帳號>.github.io/<repo 名稱>/`。
+- Cloudflare 連動這個 GitHub repo：每次推上 `main`，Cloudflare 執行 `npm run build` 再 `npx wrangler deploy`，把 `dist/` 當靜態檔發布（設定在 `wrangler.jsonc`）。
+- 安全標頭（CSP 等）在 `public/_headers`。
+- GitHub Actions（`.github/workflows/ci.yml`）只跑測試與建置，不部署。
+- 舊的 GitHub Pages 網址已停用（github.io 網域和其他 Pages 網站共用瀏覽器儲存空間，不適合放同步 token）。
 
 決策與理由見 [NOTES.md](NOTES.md)。

@@ -56,9 +56,11 @@
 - **衝突處理**：寫回時帶 sha，被搶先（409）就重讀、重合併、重寫，最多 3 次。解密失敗一律中止，不會覆寫雲端。
 - **比對用排序鍵後的 JSON**：測試發現合併結果欄位順序不同會被誤判為有變更，每次同步都多一個 commit。
 - **github.io 上停用同步**：使用者的 6 個 GitHub Pages 網站共用 marimbacheng.github.io 網域與 localStorage，不在那裡存 token。
-- **改用 Cloudflare Pages（*.pages.dev 獨立網域）**，以 Cloudflare 的 GitHub 連動部署。理由：獨立網域隔離 localStorage；GitHub repo 不需要存任何 Cloudflare 金鑰。
+- **託管改為 Cloudflare Workers 靜態資產（wealth-ledger.marimbacheng.workers.dev）**，用 Cloudflare 的 GitHub 連動（Workers Builds）在推上 main 時建置部署；設定在 `wrangler.jsonc`。理由：獨立網域隔離 localStorage；網址在自己帳號的子網域下不會撞名；GitHub repo 不需要存任何 Cloudflare 金鑰。
+  - 落選：Cloudflare Pages。`wealth-ledger.pages.dev` 已被別人使用（實測是另一個不相干的網站），且 Cloudflare 現在把 Pages 標為舊流程。
   - 落選：GitHub Actions + wrangler（要把 Cloudflare API token 放進 GitHub secrets）。
-- **內容安全政策（CSP）**：只允許載入自己的程式與 Google Fonts、只允許連線到 api.github.com；Cloudflare 用 `public/_headers`，HTML 另有 meta 版本。理由：token 存在 localStorage，限制外部腳本與外送連線。
+- **GitHub Pages 已停用，GitHub Actions 只跑測試與建置**（2026-10-19）。
+- **內容安全政策（CSP）**：只允許載入自己的程式與 Google Fonts、只允許連線到 api.github.com；Cloudflare 用 `public/_headers`（實測回應標頭已生效），HTML 另有 meta 版本。理由：token 存在 localStorage，限制外部腳本與外送連線。
 - **測試**：同步邏輯用記憶體內的假 GitHub API 測（`dev/fakeGithub.ts`，只接受 `test-token`）；另有 `tests/sync.live.test.ts` 用本機 `gh` 登入對真正的 API 測一次（寫 `_selftest/` 後刪除）。瀏覽器內兩台裝置測試用 localhost 與 device-b.localhost 兩個網域模擬。
 
 ## 個人資料現況

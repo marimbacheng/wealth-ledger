@@ -37,7 +37,7 @@ function cspMeta(): Plugin {
   };
 }
 
-// 預設部署在網域根目錄（Cloudflare Pages）；若部署到 GitHub Pages 專案頁面，由 workflow 設定 BASE_PATH。
+// 部署在網域根目錄（Cloudflare Workers）；BASE_PATH 只在需要掛在子路徑時才設定。
 export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
   plugins: [react(), fakeGithub(), cspMeta()],
