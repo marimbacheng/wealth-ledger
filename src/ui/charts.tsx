@@ -7,6 +7,7 @@ import { money, pct } from './format';
 const C = {
   s1: 'var(--series-1)',
   s2: 'var(--series-2)',
+  tax: 'var(--tax)', // 預扣稅：淺灰，代表「被扣走的部分」
   grid: 'var(--rule)',
   axis: 'var(--rule)',
   muted: 'var(--muted)',
@@ -172,7 +173,7 @@ export function DividendYearChart({ data }: { data: { year: string; net: number;
           稅後淨額
         </span>
         <span>
-          <i style={{ background: C.s2 }} />
+          <i style={{ background: C.tax }} />
           預扣稅
         </span>
       </div>
@@ -187,7 +188,7 @@ export function DividendYearChart({ data }: { data: { year: string; net: number;
               content={<Tip extra={(p) => `稅前 ${money((p.net as number) + (p.tax as number))}${p.estimated ? '（含估算預扣稅）' : ''}`} />}
             />
             <Bar dataKey="net" name="稅後淨額" stackId="d" fill={C.s1} stroke="var(--page)" strokeWidth={2} />
-            <Bar dataKey="tax" name="預扣稅" stackId="d" fill={C.s2} stroke="var(--page)" strokeWidth={2} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="tax" name="預扣稅" stackId="d" fill={C.tax} stroke="var(--page)" strokeWidth={2} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

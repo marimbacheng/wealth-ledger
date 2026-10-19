@@ -56,7 +56,8 @@ export default function App() {
   const [store, setStore] = useState<Store>(() => loadStore());
   const [saveFailed, setSaveFailed] = useState(false);
   const [tab, setTab] = useState<Tab>(() => (store.snapshots.length || store.txns.length ? (readPref('tab', 'overview') as Tab) : 'setup'));
-  const [updown, setUpdown] = useState(() => readPref('updown', 'tw'));
+  // 預設綠漲紅跌；只有使用者自己切換過才記住（換了儲存鍵，舊版自動存下的設定不再沿用）
+  const [updown, setUpdown] = useState(() => readPref('updown-v2', 'us'));
   const asOf = today();
 
   useEffect(() => {
@@ -65,7 +66,6 @@ export default function App() {
   useEffect(() => writePref('tab', tab), [tab]);
   useEffect(() => {
     document.documentElement.dataset.updown = updown;
-    writePref('updown', updown);
   }, [updown]);
 
   const report = useMemo(() => buildReport(store, asOf), [store, asOf]);
@@ -124,9 +124,15 @@ export default function App() {
           <SyncBadge sync={sync} onClick={() => setTab('setup')} />
           <label className="controls">
             漲跌色
-            <select value={updown} onChange={(e) => setUpdown(e.target.value)}>
-              <option value="tw">紅漲綠跌</option>
+            <select
+              value={updown}
+              onChange={(e) => {
+                setUpdown(e.target.value);
+                writePref('updown-v2', e.target.value);
+              }}
+            >
               <option value="us">綠漲紅跌</option>
+              <option value="tw">紅漲綠跌</option>
             </select>
           </label>
         </div>

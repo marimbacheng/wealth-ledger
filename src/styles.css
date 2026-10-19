@@ -13,8 +13,9 @@
   --ochre-soft: #f3e3cc;
   --series-1: #006c9d;
   --series-2: #c37829;
-  --up: #b5362a;
-  --down: #2e6f4e;
+  --red: #b5362a;
+  --green: #2e6f4e;
+  --tax: #bdb7aa;
   --grain-opacity: 0.05;
   --font-sans: 'Geist', 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', system-ui, sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
@@ -36,8 +37,9 @@
     --ochre-soft: #3a2a17;
     --series-1: #0995b2;
     --series-2: #c87f2c;
-    --up: #e36f5c;
-    --down: #5fb98a;
+    --red: #e36f5c;
+    --green: #5fb98a;
+    --tax: #b3aea3;
     --grain-opacity: 0.035;
   }
 }
@@ -55,17 +57,20 @@
   --ochre-soft: #3a2a17;
   --series-1: #0995b2;
   --series-2: #c87f2c;
-  --up: #e36f5c;
-  --down: #5fb98a;
+  --red: #e36f5c;
+  --green: #5fb98a;
+  --tax: #b3aea3;
   --grain-opacity: 0.035;
 }
 
-/* 漲跌色：預設台灣慣例（紅漲綠跌），可切換為美股慣例 */
-:root[data-updown='us'] .up {
-  color: var(--down);
+/* 漲跌色：預設綠漲紅跌（美股慣例），可切換為台灣慣例 */
+:root {
+  --up: var(--green);
+  --down: var(--red);
 }
-:root[data-updown='us'] .down {
-  color: var(--up);
+:root[data-updown='tw'] {
+  --up: var(--red);
+  --down: var(--green);
 }
 
 * {
@@ -471,7 +476,7 @@ button.primary {
   border-color: var(--ink);
 }
 button.danger {
-  color: var(--up);
+  color: var(--red);
   border-color: transparent;
   padding: 4px 8px;
 }
