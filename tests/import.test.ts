@@ -104,6 +104,49 @@ describe('Schwab 匯入（合成資料）', () => {
   });
 });
 
+// TD Ameritrade 轉入 Schwab 的歷史格式（合成數字）
+const TDA = `"Date","Action","Symbol","Description","Quantity","Price","Fees & Comm","Amount"
+"06/03/2024","Internal Transfer","","TDA TO CS&CO TRANSFER","","","","$2.22"
+"06/03/2024","Journaled Shares","","TDA TRAN - CASH MOVEMENT OF OUTGOING ACCOUNT TRANSFER","","","","-$2.22"
+"05/13/2024","Journaled Shares","BRK/B","TDA TRAN - TRANSFER OF SECURITY OR OPTION OUT (BRK B)","-3","","",""
+"05/13/2024","Internal Transfer","BRKB","BERKSHIRE HATHAWAY CLASS B","3","","",""
+"04/03/2024","Cash In Lieu","","TDA TRAN - CASH IN LIEU OF FRACTIONAL SHARES (SOLV)","","","","$9.38"
+"04/01/2024","Journaled Shares","SOLV/WI","TDA TRAN - NON-TAXABLE SPIN OFF/LIQUIDATION DISTRIBUTION (SOLV)","2","","",""
+"11/17/2025 as of 11/14/2025","Reinvestment Adj","O","REALTY INCOME CORP REIT","0.1594","$56.595","","$9.02"
+"10/31/2022","Qual Div Reinvest","","TDA TRAN - QUALIFIED DIVIDEND (JPM)","","","","$1.03"
+"10/26/2022","Journaled Shares","","TDA TRAN - W-8 WITHHOLDING (CMCSA)","","","","-$0.25"
+"10/26/2022","Qual Div Reinvest","","TDA TRAN - QUALIFIED DIVIDEND (CMCSA)","","","","$0.82"
+"09/01/2023","ADR Mgmt Fee","","TDA TRAN - ADR FEE (UL)","","","","-$0.10"
+"08/29/2024","NRA Tax Adj","","SCHWAB1 INT 07/30-08/28","","","","-$0.03"
+`;
+
+describe('TD Ameritrade 時期的交易紀錄', () => {
+  const b = importText(TDA, 'tda.csv');
+  const by = (desc: string) => b.txns.find((t) => t.description?.includes(desc))!;
+
+  it('股利、預扣稅、ADR 費用從說明的括號取代號', () => {
+    expect(by('QUALIFIED DIVIDEND (JPM)')).toMatchObject({ type: 'DIV', symbol: 'JPM' });
+    expect(by('W-8 WITHHOLDING (CMCSA)')).toMatchObject({ type: 'TAX', symbol: 'CMCSA', amount: -0.25 });
+    expect(by('ADR FEE (UL)')).toMatchObject({ type: 'FEE', symbol: 'UL' });
+  });
+
+  it('券商轉換的證券與現金移轉不算入金或提領', () => {
+    expect(by('TRANSFER OF SECURITY')).toMatchObject({ type: 'OTHER', symbol: 'BRK.B' });
+    expect(by('BERKSHIRE HATHAWAY')).toMatchObject({ type: 'OTHER', symbol: 'BRK.B', qty: 3 });
+    expect(by('TDA TO CS&CO')).toMatchObject({ type: 'TRANSFER_IN', amount: 2.22 });
+    expect(by('CASH MOVEMENT')).toMatchObject({ type: 'TRANSFER_OUT', amount: -2.22 });
+    expect(b.txns.some((t) => t.type === 'DEPOSIT' || t.type === 'WITHDRAW')).toBe(false);
+  });
+
+  it('再投入撤銷、分拆、零股折現、利息預扣都能辨識，不產生未辨識提醒', () => {
+    expect(by('REALTY INCOME')).toMatchObject({ type: 'SELL', drip: true, qty: 0.1594 });
+    expect(by('SPIN OFF')).toMatchObject({ type: 'OTHER', symbol: 'SOLV.WI' });
+    expect(by('CASH IN LIEU')).toMatchObject({ type: 'OTHER', symbol: 'SOLV', amount: 9.38 });
+    expect(by('SCHWAB1 INT')).toMatchObject({ type: 'TAX', symbol: undefined });
+    expect(b.warnings).toEqual([]);
+  });
+});
+
 describe('月底總值範本', () => {
   it('匯入成資產快照點，重複匯入不重複', async () => {
     const { mergeBatch } = await import('../src/store/merge');

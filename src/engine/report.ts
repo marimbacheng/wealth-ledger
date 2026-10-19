@@ -306,7 +306,8 @@ export function buildReport(store: Store, asOf: string): Report {
 
   // ---------- 總報酬 ----------
   const cashTx = store.txns.filter((t) => t.date <= asOf && t.source !== 'schwab-income');
-  const interest = sum(cashTx.filter((t) => t.type === 'INTEREST').map((t) => t.amount));
+  // 利息扣掉沒有代號的預扣稅（Schwab 對現金利息的 NRA 預扣）
+  const interest = sum(cashTx.filter((t) => t.type === 'INTEREST' || (t.type === 'TAX' && !t.symbol)).map((t) => t.amount));
   const fees = -sum(cashTx.filter((t) => t.type === 'FEE').map((t) => t.amount));
   const pendingMigration = sum(led.pending.map((p) => p.proceeds - p.originalCost));
   const total = totals.contGain + realized.continuous + pendingMigration + div.total.net + interest - fees;

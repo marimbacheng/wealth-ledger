@@ -48,7 +48,11 @@ function covered(coverage: Coverage[], broker: Broker, date: string): boolean {
 // Schwab 動作名稱：Qual Div Reinvest、Reinvest Dividend；投資收益檔的 "Rev Non-Qualified Div" 也是再投入（已用交易紀錄比對確認）
 const isReinvestAction = (raw?: string) => /reinvest|再投入|^rev /i.test(raw ?? '');
 
+// 投資收益檔有時用 CUSIP（9 碼、含數字）代替代號，例如 Unilever 是 904767704，交易紀錄則是 UL
+export const looksLikeCusip = (s?: string) => !!s && /^[0-9A-Z]{9}$/.test(s) && /\d/.test(s);
+
 // Schwab 交易紀錄與投資收益檔會記到同一筆股利：同代號、金額相同、日期差 7 天內視為同一筆，保留交易紀錄那筆（它有預扣稅）
+// 收益檔是 CUSIP 時，代號比不上，改用金額＋日期配對
 function dedupeIncome(divs: Txn[]): Txn[] {
   const primary = divs.filter((d) => d.source !== 'schwab-income');
   const used = new Set<Txn>();
@@ -58,7 +62,7 @@ function dedupeIncome(divs: Txn[]): Txn[] {
       (p) =>
         !used.has(p) &&
         p.broker === inc.broker &&
-        p.symbol === inc.symbol &&
+        (p.symbol === inc.symbol || looksLikeCusip(inc.symbol)) &&
         Math.abs(p.amount - inc.amount) < 0.01 &&
         Math.abs(daysBetween(p.date, inc.date)) <= 7,
     );

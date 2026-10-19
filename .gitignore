@@ -1,5 +1,18 @@
-# 個人財務資料一律不進版控
+# 個人財務資料一律不進版控（資料夾名稱、檔案類型雙重把關）
 *Schwab*/
+*Ameritrade*/
+*TDA*/
+*資料*/
+*匯出*/
+*.csv
+*.CSV
+*.pdf
+*.PDF
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.heic
 private/
 data/
 *.ledger.json

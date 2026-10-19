@@ -108,11 +108,32 @@ export function parseBalances(rows: Row[], file: string): ImportBatch {
 const DIV_ACTIONS = /div|dividend|cap gain|capital gain/i;
 const TAX_ACTIONS = /nra tax|foreign tax|withholding|nra withhold/i;
 
-export function classifySchwabAction(action: string, amount: number): { type: TxnType; drip?: boolean } {
+// note：已知的特殊列，記成「其他」但不需要提醒使用者
+export function classifySchwabAction(
+  action: string,
+  amount: number,
+  desc = '',
+  hasQty = false,
+): { type: TxnType; drip?: boolean; note?: string } {
   const a = action.trim();
   if (a === 'Buy' || a === 'Buy to Open') return { type: 'BUY' };
   if (a === 'Sell' || a === 'Sell to Close') return { type: 'SELL' };
   if (a === 'Reinvest Shares') return { type: 'BUY', drip: true };
+  // 再投入更正：金額為正 = 撤銷先前的再投入（股數減少、現金退回）
+  if (a === 'Reinvestment Adj') return amount > 0 ? { type: 'SELL', drip: true, note: '再投入更正（撤銷）' } : { type: 'BUY', drip: true, note: '再投入更正' };
+  // TD Ameritrade 轉入 Schwab 的歷史格式
+  if (a === 'Journaled Shares') {
+    if (/WITHHOLDING/i.test(desc)) return { type: 'TAX' };
+    if (/TRANSFER OF SECURITY/i.test(desc)) return { type: 'OTHER', note: '券商轉換：證券轉出（TD Ameritrade → Schwab）' };
+    if (/SPIN OFF/i.test(desc)) return { type: 'OTHER', note: '分拆配股' };
+    if (/CASH MOVEMENT OF OUTGOING ACCOUNT TRANSFER/i.test(desc)) return { type: amount >= 0 ? 'TRANSFER_IN' : 'TRANSFER_OUT', note: '券商轉換：現金移轉' };
+    return { type: 'OTHER' };
+  }
+  if (a === 'Internal Transfer') {
+    if (hasQty) return { type: 'OTHER', note: '券商轉換：證券轉入（TD Ameritrade → Schwab）' };
+    return { type: amount >= 0 ? 'TRANSFER_IN' : 'TRANSFER_OUT', note: '券商轉換：現金移轉' };
+  }
+  if (a === 'Cash In Lieu') return { type: 'OTHER', note: '零股折現（公司行動）' };
   if (TAX_ACTIONS.test(a)) return { type: 'TAX' };
   if (DIV_ACTIONS.test(a)) return { type: 'DIV' };
   if (/interest/i.test(a)) return { type: 'INTEREST' };
@@ -144,15 +165,18 @@ export function parseTransactions(rows: Row[], file: string): ImportBatch {
     dates.push(date);
     const action = r[ix.action]?.trim() ?? '';
     const amount = parseMoney(r[ix.amount]) ?? 0;
-    const { type, drip } = classifySchwabAction(action, amount);
-    const symRaw = r[ix.sym]?.trim() ?? '';
+    const desc = r[ix.desc]?.trim() ?? '';
+    const qtyRaw = parseMoney(r[ix.qty]);
+    const { type, drip, note } = classifySchwabAction(action, amount, desc, qtyRaw != null && qtyRaw !== 0);
+    // TD Ameritrade 時期的股利、預扣稅常沒有填代號，代號在說明最後的括號裡，例如 "QUALIFIED DIVIDEND (CMCSA)"
+    const symRaw = r[ix.sym]?.trim() || (desc.match(/\(([A-Z][A-Z0-9 ./-]{0,9})\)\s*$/)?.[1] ?? '');
     const t: Omit<Txn, 'id'> = {
       broker: 'schwab',
       date,
       type,
       symbol: symRaw ? normalizeSymbol(symRaw) : undefined,
       description: r[ix.desc]?.trim(),
-      qty: parseMoney(r[ix.qty]) != null ? Math.abs(parseMoney(r[ix.qty])!) : undefined,
+      qty: qtyRaw != null ? Math.abs(qtyRaw) : undefined,
       price: parseMoney(r[ix.price]),
       fee: parseMoney(r[ix.fee]) != null ? Math.abs(parseMoney(r[ix.fee])!) : undefined,
       amount,
@@ -160,7 +184,8 @@ export function parseTransactions(rows: Row[], file: string): ImportBatch {
       source: 'schwab-transactions',
     };
     if (drip) t.drip = true;
-    if (type === 'OTHER') b.warnings.push(`${date} 未辨識的動作「${action}」${symRaw}，以「其他」記錄，不影響持倉`);
+    if (note) t.note = note;
+    if (type === 'OTHER' && !note) b.warnings.push(`${date} 未辨識的動作「${action}」${symRaw}，以「其他」記錄，不影響持倉`);
     if (type === 'SELL' || type === 'BUY') {
       if (!t.qty) b.warnings.push(`${date} ${action} ${symRaw} 沒有股數`);
     }

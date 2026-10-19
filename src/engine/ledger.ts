@@ -133,11 +133,18 @@ export function computeLedgers(store: Store, asOf: string): LedgerResult {
   for (const t of txns) {
     const afterAnchor = t.broker === 'tw' || t.date > anchorDate;
 
-    if (t.drip && t.type === 'BUY' && t.symbol && t.qty) {
+    if (t.drip && t.symbol && t.qty) {
       const d = (res.drip[t.symbol] ??= { qty: 0, cost: 0, count: 0 });
-      d.qty += t.qty;
-      d.cost += -t.amount;
-      d.count++;
+      if (t.type === 'BUY') {
+        d.qty += t.qty;
+        d.cost += -t.amount;
+        d.count++;
+      } else if (t.type === 'SELL') {
+        // 再投入撤銷：扣回股數與金額，之後通常會有一筆更正後的再投入
+        d.qty -= t.qty;
+        d.cost -= t.amount;
+        d.count--;
+      }
     }
 
     if (!afterAnchor) continue;

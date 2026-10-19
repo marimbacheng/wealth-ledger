@@ -192,6 +192,17 @@ describe('股利', () => {
     return s;
   }
 
+  it('投資收益檔用 CUSIP 時，用金額與日期配對，不會重複計算', () => {
+    const s = divStore();
+    s.txns.push(
+      tx({ broker: 'schwab', date: '2025-06-13', type: 'DIV', symbol: 'UL', amount: 9.8, rawAction: 'Qualified Dividend' }),
+      tx({ broker: 'schwab', date: '2025-06-13', type: 'DIV', symbol: '904767704', amount: 9.8, source: 'schwab-income', rawAction: 'Qualified Dividend' }),
+    );
+    s.coverage.push({ broker: 'schwab', kind: 'transactions', from: '2022-10-20', to: '2026-10-16' });
+    const ev = buildDividendEvents(s).filter((e) => e.date === '2025-06-13');
+    expect(ev.map((e) => e.symbol)).toEqual(['UL']);
+  });
+
   it('交易紀錄與投資收益檔重複的股利只算一次', () => {
     const ev = buildDividendEvents(divStore());
     expect(ev.filter((e) => e.symbol === 'DDD' && e.date === '2026-07-01')).toHaveLength(1);
