@@ -60,6 +60,7 @@
   - 落選：Cloudflare Pages。`wealth-ledger.pages.dev` 已被別人使用（實測是另一個不相干的網站），且 Cloudflare 現在把 Pages 標為舊流程。
   - 落選：GitHub Actions + wrangler（要把 Cloudflare API token 放進 GitHub secrets）。
 - **GitHub Pages 已停用，GitHub Actions 只跑測試與建置**（2026-10-19）。
+- **Cloudflare 的 GitHub App 只授權 wealth-ledger 一個 repo**（原本是全部 repo，含私人資料 repo）。理由：最小權限；它有程式碼與部署的讀寫權限，沒必要看得到其他 repo。
 - **內容安全政策（CSP）**：只允許載入自己的程式與 Google Fonts、只允許連線到 api.github.com；Cloudflare 用 `public/_headers`（實測回應標頭已生效），HTML 另有 meta 版本。理由：token 存在 localStorage，限制外部腳本與外送連線。
 - **測試**：同步邏輯用記憶體內的假 GitHub API 測（`dev/fakeGithub.ts`，只接受 `test-token`）；另有 `tests/sync.live.test.ts` 用本機 `gh` 登入對真正的 API 測一次（寫 `_selftest/` 後刪除）。瀏覽器內兩台裝置測試用 localhost 與 device-b.localhost 兩個網域模擬。
 
