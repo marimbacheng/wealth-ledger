@@ -1,0 +1,14 @@
+# 個人財務資料一律不進版控
+*Schwab*/
+private/
+data/
+*.ledger.json
+wealth-ledger-backup*.json
+
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.*
+*.tsbuildinfo

@@ -1,0 +1,43 @@
+# 跨券商總報酬帳
+
+把 Schwab 六年的投資紀錄，和之後在台灣複委託重新買進的部位接成一本帳。
+
+- **券商帳**：各券商帳上的實際成本，用來和券商 App 對帳、計算海外所得。
+- **延續帳**：把 Schwab 原始成本延續到複委託的新部位，用來看長期報酬與成本殖利率（YOC）。
+- **總報酬**：延續帳未實現 + 已實現 + 股利淨額，跨券商合計。
+- **股利**：每年稅前／預扣稅／稅後、個股累積、複委託今年實領、未來 12 個月預估、股利再投入增加的股數。
+- **圖表**：持股比例、產業分布、資產成長、每年股利。
+
+## 資料放在哪裡
+
+**只在你自己的瀏覽器裡（localStorage）**。網站本身只有程式，不含任何財務資料，部署到 GitHub Pages 也一樣。
+
+- 換電腦或換瀏覽器：在「匯入與設定 → 備份與還原」下載備份 JSON，到新的地方還原。
+- 備份檔與 Schwab 匯出檔都已列入 `.gitignore`，不要手動加進 repo。
+
+## 使用方式
+
+1. 從 Schwab 匯出：Positions、Transactions（日期拉到最早）、Investment Income、Realized Gain/Loss（日期拉到最早）、Balances。
+2. 開啟網站 →「匯入與設定」→ 把 CSV 全部拖進去。
+3. **在 Schwab 賣出前**，確認已匯入最新一份 Positions（延續帳的起點）。
+4. 賣出、匯款後，再匯出一次 Schwab 交易紀錄與已實現損益並匯入。
+5. 複委託的買進、股利：在「交易帳」手動新增，或下載範本整理成 CSV 匯入。從 Schwab 匯回的錢記成「轉入」，中轉行手續費記成「費用」。
+6. 在「匯入與設定」確認遷移區間，檢查配對表。
+
+## 開發
+
+```bash
+npm install
+npm run dev
+npm test
+```
+
+`tests/import.real.test.ts` 會讀本機的 `20261015 Schwab 資料/`，資料夾不存在時自動略過。
+
+## 部署到 GitHub Pages
+
+1. 在 GitHub 建立 repo，推上 `main`。
+2. repo 的 Settings → Pages → Source 選 **GitHub Actions**。
+3. 之後每次推上 `main`，`.github/workflows/deploy.yml` 會跑測試、建置並部署到 `https://<帳號>.github.io/<repo 名稱>/`。
+
+決策與理由見 [NOTES.md](NOTES.md)。
