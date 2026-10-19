@@ -132,8 +132,7 @@ a {
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--muted);
 }
 .masthead h1 {
@@ -173,21 +172,26 @@ a {
 .tabs {
   display: flex;
   gap: 28px;
+  /* 只能左右滑：鎖住這一列自己的垂直捲動，避免手機上文字上下飄；整頁仍可正常上下捲 */
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
   margin: 0 0 8px;
-  border-bottom: 1px solid var(--rule);
+  box-shadow: inset 0 -1px 0 var(--rule);
+}
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 .tabs button {
+  flex: none;
   border: 0;
   border-radius: 0;
   background: none;
   color: var(--muted);
-  padding: 12px 0 10px;
+  padding: 12px 0;
   font-size: 14px;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
   white-space: nowrap;
 }
 .tabs button .no {
@@ -201,7 +205,7 @@ a {
 }
 .tabs button.active {
   color: var(--ink);
-  border-bottom-color: var(--ink);
+  box-shadow: inset 0 -2px 0 var(--ink);
 }
 
 /* ---------- 版面區塊 ---------- */
@@ -667,4 +671,26 @@ details > summary {
   margin: 48px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--rule);
+}
+
+/* 可排序的表頭 */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover,
+th.sortable.on {
+  color: var(--ink);
+}
+th.sortable .arrow {
+  margin-left: 4px;
+  font-size: 9px;
+  opacity: 0.45;
+}
+th.sortable.on .arrow {
+  opacity: 1;
+}
+th.sortable:focus-visible {
+  outline: 2px solid var(--ochre);
+  outline-offset: -2px;
 }

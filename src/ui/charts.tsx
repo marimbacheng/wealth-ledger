@@ -15,15 +15,28 @@ const C = {
 const tick = { fill: C.muted, fontSize: 11 };
 const compact = (n: number) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `$${n.toFixed(0)}`);
 
+// 目前是否為深色：使用者在頁首指定的外觀優先，沒指定就跟隨系統
+function isDarkNow(): boolean {
+  if (typeof document === 'undefined') return false;
+  const t = document.documentElement.dataset.theme;
+  if (t === 'dark') return true;
+  if (t === 'light') return false;
+  return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+}
+
 function useDark(): boolean {
-  const q = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : undefined;
-  const [dark, setDark] = useState(() => q?.matches ?? false);
+  const [dark, setDark] = useState(isDarkNow);
   useEffect(() => {
-    if (!q) return;
-    const on = (e: MediaQueryListEvent) => setDark(e.matches);
-    q.addEventListener('change', on);
-    return () => q.removeEventListener('change', on);
-  }, [q]);
+    const update = () => setDark(isDarkNow());
+    const q = window.matchMedia?.('(prefers-color-scheme: dark)');
+    q?.addEventListener('change', update);
+    const mo = new MutationObserver(update);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => {
+      q?.removeEventListener('change', update);
+      mo.disconnect();
+    };
+  }, []);
   return dark;
 }
 

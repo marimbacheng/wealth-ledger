@@ -24,7 +24,7 @@ export function Overview({ report: r, store }: PageProps) {
             <Kpi hero label="跨券商累積報酬（已匯入資料的部分）" value={<Gain value={tr.total} />} />
             <Leaders
               rows={[
-                { k: '未實現・歷史成本', v: money(tr.unrealized, { sign: true }), cls: tone(tr.unrealized) },
+                { k: '未實現（延續成本）', v: money(tr.unrealized, { sign: true }), cls: tone(tr.unrealized) },
                 { k: '已實現', v: money(tr.realized, { sign: true }), cls: tone(tr.realized) },
                 Math.abs(tr.pendingMigration) > 0.005 && { k: '遷移中（已賣出待買回）', v: money(tr.pendingMigration, { sign: true }), cls: tone(tr.pendingMigration) },
                 { k: '累積股利・稅後', v: money(tr.dividendsNet) },
@@ -55,13 +55,25 @@ export function Overview({ report: r, store }: PageProps) {
         </div>
       </Section>
 
-      <Section no="02" title="兩本帳" aside="新成本拿來報稅與對帳，延續成本拿來看投資歷程">
+      <Section no="02" title="成本" aside="總成本拿來報稅與對帳；延續成本拿來看長期報酬與成本殖利率">
         <div className="grid">
           <div>
-            <div className="eyebrow">延續帳・歷史成本</div>
+            <div className="eyebrow">實際成本・各券商帳上</div>
             <Leaders
               rows={[
-                { k: '持倉歷史成本', v: money(t.contCost) },
+                { k: 'Schwab 成本', v: hasSchwab ? money(schwabCost) : '已全數轉出' },
+                { k: '永豐成本', v: hasTw ? money(t.twCost) : '尚未買進' },
+                { k: '總成本', v: money(t.brokerCost), total: true },
+                { k: '帳面盈虧', v: <Gain value={t.brokerGain} base={t.brokerCost} /> },
+                { k: '成本殖利率・稅後', v: pct(r.yoc.brokerNet) },
+              ]}
+            />
+          </div>
+          <div>
+            <div className="eyebrow">延續成本・含 Schwab 時期</div>
+            <Leaders
+              rows={[
+                { k: '延續成本', v: money(t.contCost) },
                 { k: '市值', v: money(t.marketValue) },
                 { k: '帳面盈虧', v: <Gain value={t.contGain} base={t.contCost} />, total: true },
                 { k: '成本殖利率・稅後', v: pct(r.yoc.contNet) },
@@ -69,27 +81,15 @@ export function Overview({ report: r, store }: PageProps) {
             />
           </div>
           <div>
-            <div className="eyebrow">券商帳・實際成本</div>
-            <Leaders
-              rows={[
-                hasSchwab && { k: 'Schwab 成本', v: money(schwabCost) },
-                hasSchwab && { k: 'Schwab 帳面盈虧', v: <Gain value={t.schwabValue - schwabCost} base={schwabCost} /> },
-                { k: '複委託成本', v: hasTw ? money(t.twCost) : '尚未買進' },
-                { k: '複委託帳面盈虧', v: hasTw ? <Gain value={t.twGain} base={t.twCost} /> : '—', total: true },
-                { k: '成本殖利率・稅後', v: pct(r.yoc.brokerNet) },
-              ]}
-            />
-          </div>
-          <div>
             <div className="eyebrow">差異</div>
             <Leaders
               rows={[
-                { k: '延續成本 − 券商成本', v: money(costGap, { sign: true }) },
+                { k: '延續成本 − 總成本', v: money(costGap, { sign: true }) },
                 { k: '遷移配對筆數', v: String(r.migration.matches.length) },
               ]}
             />
             <p className="muted" style={{ fontSize: 12 }}>
-              遷移前兩者相同；在複委託買回後，差額就是 Schwab 時期累積、改由延續帳保留的帳面損益。
+              遷移前兩者相同。在永豐買回後，總成本變成永豐的新買進成本；延續成本保留 Schwab 時期的原始成本，再加上賣出與買回之間的價差和手續費。
             </p>
           </div>
         </div>
@@ -131,7 +131,7 @@ export function Overview({ report: r, store }: PageProps) {
                 { k: '累積預扣稅', v: money(r.dividends.total.tax) },
                 { k: '累積稅後', v: money(r.dividends.total.net), total: true },
                 lastYear && { k: `${lastYear.year} 年合計實領`, v: money(lastYear.totals.net) },
-                { k: `${r.dividends.year} 年複委託實領`, v: money(r.dividends.twYtd.net) },
+                { k: `${r.dividends.year} 年永豐實領`, v: money(r.dividends.twYtd.net) },
               ]}
             />
           </div>
@@ -162,7 +162,7 @@ export function Overview({ report: r, store }: PageProps) {
               ))}
               {store.snapshots.map((s) => (
                 <tr key={s.id}>
-                  <td className="l">{s.broker === 'schwab' ? 'Schwab' : '複委託'} 持倉快照</td>
+                  <td className="l">{s.broker === 'schwab' ? 'Schwab' : '永豐'} 持倉快照</td>
                   <td />
                   <td>{s.date}</td>
                 </tr>

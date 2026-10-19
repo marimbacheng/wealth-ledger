@@ -141,7 +141,7 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
               <li>
                 <strong>Balances</strong>（餘額）：記一個資產快照點。
               </li>
-              <li>在複委託把股票全部賣掉、錢匯出後，再匯出一次交易紀錄與已實現損益，遷移配對才會完整。</li>
+              <li>在 Schwab 把股票全部賣掉、錢匯出後，再匯出一次交易紀錄與已實現損益，遷移配對才會完整。</li>
             </ul>
           </details>
         </Card>
@@ -152,7 +152,7 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
       </div>
 
       <div className="grid two">
-        <Card title="遷移設定" desc="在這段期間內的 Schwab 賣出與複委託買進會配對，用來把原始成本延續到新部位。">
+        <Card title="遷移設定" desc="在這段期間內的 Schwab 賣出與永豐買進會配對，用來把原始成本延續到新部位。">
           <div className="row">
             <label className="field">
               Schwab 賣出 起
@@ -163,7 +163,7 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
               <input type="date" value={m.schwabSellTo} onChange={setMig('schwabSellTo')} />
             </label>
             <label className="field">
-              複委託買回 起
+              永豐買回 起
               <input type="date" value={m.twBuyFrom} onChange={setMig('twBuyFrom')} />
             </label>
             <label className="field">
@@ -183,7 +183,7 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
                     <th>股數</th>
                     <th>原始成本</th>
                     <th>Schwab 賣出所得</th>
-                    <th>複委託買進成本</th>
+                    <th>永豐買進成本</th>
                     <th>延續成本</th>
                   </tr>
                 </thead>
@@ -410,10 +410,10 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
       </div>
 
       <div className="grid two">
-        <Card title="複委託匯入範本" desc="台灣各券商匯出格式不同；把資料整理成這個欄位順序（UTF-8 或 Big5 皆可）即可匯入。券商欄填 schwab 可補登早年資料。">
+        <Card title="永豐（複委託）匯入範本" desc="台灣各券商匯出格式不同；把資料整理成這個欄位順序（UTF-8 或 Big5 皆可）即可匯入。券商欄填 schwab 可補登早年資料。">
           <div className="row">
-            <button onClick={() => download('複委託交易範本.csv', '\uFEFF' + TXN_EXAMPLE, 'text/csv')}>下載交易／股利範本</button>
-            <button onClick={() => download('複委託庫存範本.csv', '\uFEFF' + POS_EXAMPLE, 'text/csv')}>下載庫存範本（對帳用）</button>
+            <button onClick={() => download('永豐交易範本.csv', '\uFEFF' + TXN_EXAMPLE, 'text/csv')}>下載交易／股利範本</button>
+            <button onClick={() => download('永豐庫存範本.csv', '\uFEFF' + POS_EXAMPLE, 'text/csv')}>下載庫存範本（對帳用）</button>
             <button onClick={() => download('月底總值範本.csv', '\uFEFF' + VALUE_EXAMPLE, 'text/csv')}>下載月底總值範本</button>
           </div>
           <p className="desc" style={{ marginTop: 8 }}>

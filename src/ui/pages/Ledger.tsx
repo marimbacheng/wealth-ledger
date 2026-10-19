@@ -95,7 +95,7 @@ export function Ledger({ store, update }: PageProps) {
   return (
     <>
       <div className="section">
-        <Card title="新增一筆" desc="複委託的買進、賣出、股利；或補登 Schwab 早年資料（券商選 Schwab）。從 Schwab 匯到台灣的錢，在複委託這邊記「轉入」。">
+        <Card title="新增一筆" desc="永豐的買進、賣出、股利；或補登 Schwab 早年資料（券商選 Schwab）。從 Schwab 匯到台灣的錢，在永豐這邊記「轉入」。">
           <div className="row">
             <label className="field">
               日期
@@ -104,7 +104,7 @@ export function Ledger({ store, update }: PageProps) {
             <label className="field">
               券商
               <select value={form.券商} onChange={set('券商')}>
-                <option value="tw">複委託</option>
+                <option value="tw">永豐</option>
                 <option value="schwab">Schwab</option>
               </select>
             </label>
@@ -191,7 +191,7 @@ export function Ledger({ store, update }: PageProps) {
             <select value={broker} onChange={(e) => setBroker(e.target.value)}>
               <option value="">全部</option>
               <option value="schwab">Schwab</option>
-              <option value="tw">複委託</option>
+              <option value="tw">永豐</option>
             </select>
           </label>
           <label className="field">
@@ -236,7 +236,7 @@ export function Ledger({ store, update }: PageProps) {
               {rows.slice(0, limit).map((t) => (
                 <tr key={t.id}>
                   <td className="l">{t.date}</td>
-                  <td className="l">{t.broker === 'schwab' ? 'Schwab' : '複委託'}</td>
+                  <td className="l">{t.broker === 'schwab' ? 'Schwab' : '永豐'}</td>
                   <td className="l">
                     {TYPE_LABEL[t.type]}
                     {t.drip && <span className="badge">再投入</span>}

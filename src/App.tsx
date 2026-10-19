@@ -58,6 +58,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(() => (store.snapshots.length || store.txns.length ? (readPref('tab', 'overview') as Tab) : 'setup'));
   // 預設綠漲紅跌；只有使用者自己切換過才記住（換了儲存鍵，舊版自動存下的設定不再沿用）
   const [updown, setUpdown] = useState(() => readPref('updown-v2', 'us'));
+  // 外觀：auto 跟隨系統，light／dark 由使用者指定
+  const [theme, setTheme] = useState(() => readPref('theme', 'auto'));
   const asOf = today();
 
   useEffect(() => {
@@ -67,6 +69,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.updown = updown;
   }, [updown]);
+  useEffect(() => {
+    const el = document.documentElement;
+    if (theme === 'light' || theme === 'dark') el.dataset.theme = theme;
+    else delete el.dataset.theme;
+  }, [theme]);
 
   const report = useMemo(() => buildReport(store, asOf), [store, asOf]);
   const sync = useSync(store, setStore);
@@ -113,7 +120,7 @@ export default function App() {
     <div className="app">
       <header className="masthead">
         <div>
-          <div className="eyebrow">Private ledger · Schwab → 複委託</div>
+          <div className="eyebrow">PRIVATE LEDGER · Schwab → 永豐</div>
           <h1>跨券商總報酬帳</h1>
           <div className="meta">
             資料日 {asOf}
@@ -122,6 +129,20 @@ export default function App() {
         </div>
         <div className="controls">
           <SyncBadge sync={sync} onClick={() => setTab('setup')} />
+          <label className="controls">
+            外觀
+            <select
+              value={theme}
+              onChange={(e) => {
+                setTheme(e.target.value);
+                writePref('theme', e.target.value);
+              }}
+            >
+              <option value="auto">跟隨系統</option>
+              <option value="light">淺色</option>
+              <option value="dark">深色</option>
+            </select>
+          </label>
           <label className="controls">
             漲跌色
             <select

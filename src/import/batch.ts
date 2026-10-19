@@ -27,8 +27,8 @@ export const KIND_LABEL: Record<ImportKind, string> = {
   'schwab-realized': 'Schwab 已實現損益（彙總）',
   'schwab-realized-details': 'Schwab 已實現損益（逐批明細）',
   'schwab-balances': 'Schwab 帳戶餘額',
-  'tw-transactions': '複委託交易／股利（範本格式）',
-  'tw-positions': '複委託庫存（範本格式）',
+  'tw-transactions': '永豐交易／股利（範本格式）',
+  'tw-positions': '永豐庫存（範本格式）',
   'value-points': '月底總值（範本格式）',
   unknown: '無法辨識',
 };

@@ -18,7 +18,7 @@ export function Dividends({ report: r, store }: PageProps) {
     <>
       <div className="grid">
         <Card>
-          <Kpi label={`${d.year} 年複委託實領股利`} value={money(d.twYtd.net)} foot={d.twYtd.count ? `稅前 ${money(d.twYtd.gross)}，預扣 ${money(d.twYtd.tax)}，${d.twYtd.count} 筆` : '以複委託股利紀錄為準；尚無紀錄'} />
+          <Kpi label={`${d.year} 年永豐實領股利`} value={money(d.twYtd.net)} foot={d.twYtd.count ? `稅前 ${money(d.twYtd.gross)}，預扣 ${money(d.twYtd.tax)}，${d.twYtd.count} 筆` : '以永豐股利紀錄為準；尚無紀錄'} />
           {d.twYtd.count > 0 && <TotalsBadge t={d.twYtd} />}
         </Card>
         <Card>
@@ -45,7 +45,7 @@ export function Dividends({ report: r, store }: PageProps) {
                   <th>預扣稅</th>
                   <th>稅後實領</th>
                   <th>Schwab 稅後</th>
-                  <th>複委託稅後</th>
+                  <th>永豐稅後</th>
                   <th className="l">稅務</th>
                 </tr>
               </thead>
@@ -94,9 +94,9 @@ export function Dividends({ report: r, store }: PageProps) {
                   <th>稅前</th>
                   <th>稅後</th>
                   <th>殖利率（現價）</th>
-                  <th>成本殖利率（歷史・稅前）</th>
-                  <th>成本殖利率（歷史・稅後）</th>
-                  <th>成本殖利率（券商・稅後）</th>
+                  <th>成本殖利率（延續成本・稅前）</th>
+                  <th>成本殖利率（延續成本・稅後）</th>
+                  <th>成本殖利率（總成本・稅後）</th>
                 </tr>
               </thead>
               <tbody>
@@ -146,7 +146,7 @@ export function Dividends({ report: r, store }: PageProps) {
       </div>
 
       <div className="section">
-        <Card title="個股累積股利" desc="合併 Schwab 與複委託；含已出清的股票">
+        <Card title="個股累積股利" desc="合併 Schwab 與永豐；含已出清的股票">
           <div className="table-wrap">
             <table>
               <thead>
@@ -158,7 +158,7 @@ export function Dividends({ report: r, store }: PageProps) {
                   <th>預扣稅</th>
                   <th>稅後</th>
                   <th>Schwab 稅後</th>
-                  <th>複委託稅後</th>
+                  <th>永豐稅後</th>
                   <th className="l">稅務</th>
                 </tr>
               </thead>
@@ -271,7 +271,7 @@ export function Dividends({ report: r, store }: PageProps) {
               {events.map((e, i) => (
                 <tr key={i}>
                   <td className="l">{e.date}</td>
-                  <td className="l">{e.broker === 'schwab' ? 'Schwab' : '複委託'}</td>
+                  <td className="l">{e.broker === 'schwab' ? 'Schwab' : '永豐'}</td>
                   <td className="l">{e.symbol}</td>
                   <td>{e.gross != null ? money(e.gross) : '—'}</td>
                   <td>{money(e.tax)}</td>

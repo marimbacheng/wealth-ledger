@@ -40,7 +40,8 @@ export interface HoldingRow {
   weight: number;
   contCost: number;
   contGain: number;
-  brokerCost: number; // 各券商自己的成本加總（Schwab 部位用 Schwab 成本、複委託部位用複委託成本）
+  schwabCost: number; // 還在 Schwab 的股數，Schwab 帳上成本
+  brokerCost: number; // 總成本 = Schwab 成本 + 永豐成本（各券商帳上實際成本）
   brokerGain: number;
   twCost: number;
   twValue: number;
@@ -215,6 +216,7 @@ export function buildReport(store: Store, asOf: string): Report {
       weight: 0,
       contCost,
       contGain: mv - contCost,
+      schwabCost: sp?.cost ?? 0,
       brokerCost,
       brokerGain: mv - brokerCost,
       twCost: tp?.cost ?? 0,
@@ -230,7 +232,7 @@ export function buildReport(store: Store, asOf: string): Report {
 
   // ---------- 現金與總值 ----------
   const pendingProceeds = sum(led.pending.map((p) => p.proceeds));
-  if (led.twCash < -0.5) warnings.push(`複委託現金推算為 ${led.twCash.toFixed(2)}：可能有匯入款（轉入）或交割款尚未登錄`);
+  if (led.twCash < -0.5) warnings.push(`永豐現金推算為 ${led.twCash.toFixed(2)}：可能有匯入款（轉入）或交割款尚未登錄`);
   const totalValue = mvTotal + led.schwabCash + led.twCash;
 
   const totals: Report['totals'] = {
@@ -356,7 +358,7 @@ export function buildReport(store: Store, asOf: string): Report {
 
   // ---------- 資料涵蓋範圍 ----------
   const KIND: Record<string, string> = { transactions: '交易紀錄', income: '股利（投資收益）', realized: '已實現損益' };
-  const BROKER: Record<Broker, string> = { schwab: 'Schwab', tw: '複委託' };
+  const BROKER: Record<Broker, string> = { schwab: 'Schwab', tw: '永豐' };
   const coverage = mergeCoverage(store.coverage).map((c) => ({ label: `${BROKER[c.broker]} ${KIND[c.kind]}`, from: c.from, to: c.to }));
 
   return {
