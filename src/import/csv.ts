@@ -45,7 +45,8 @@ export function parseMoney(raw: string | undefined): number | undefined {
   if (raw == null) return undefined;
   const t = raw.trim();
   if (t === '' || t === '--' || t.toUpperCase() === 'N/A') return undefined;
-  const neg = t.startsWith('-') || (t.startsWith('(') && t.endsWith(')'));
+  // 負號可能在最前面（-$1.00）、貨幣符號後面（$-1.00，TD Ameritrade 的寫法），或用括號表示
+  const neg = /^[^\d]*-/.test(t) || (t.startsWith('(') && t.endsWith(')'));
   const n = Number(t.replace(/[()$,%\s+-]/g, ''));
   if (!Number.isFinite(n)) return undefined;
   return neg ? -n : n;

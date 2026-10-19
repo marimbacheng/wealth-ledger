@@ -54,6 +54,8 @@ describe('CSV 工具', () => {
   it('金額與日期', () => {
     expect(parseMoney('-$1,234.56')).toBe(-1234.56);
     expect(parseMoney('($5.00)')).toBe(-5);
+    expect(parseMoney('$-6.30')).toBe(-6.3);
+    expect(parseMoney('$1,234-')).toBe(1234); // 數字後面的符號不算負號
     expect(parseMoney('--')).toBeUndefined();
     expect(parseUsDate('10/15/2026 as of 10/14/2026')).toBe('2026-10-15');
     expect(parseUsDate('2026/1/5')).toBe('2026-01-05');
