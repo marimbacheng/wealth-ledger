@@ -76,11 +76,18 @@ function sellFromPool(p: Pool, qty: number): number {
 }
 
 // 延續帳的錨點：遷移開始前最後一份 Schwab 持倉快照（它的成本就是六年累積的原始成本）
+// 延續帳的錨點：第一筆「遷移賣出」之前的最後一份 Schwab 持倉快照。
+// 用實際賣出日而不是遷移區間起日：區間可以提早開始（涵蓋先匯出的款項），錨點仍會是最新的賣出前快照。
+// 這也避開「快照當天稍晚又有交易」的問題：只要賣出前一天再匯出一次持倉，就以那份為準。
 export function pickAnchor(store: Store): PositionSnapshot | undefined {
-  const from = store.settings.migration.schwabSellFrom;
+  const m = store.settings.migration;
+  const firstMigrationSell = store.txns
+    .filter((t) => t.broker === 'schwab' && t.type === 'SELL' && inRange(t.date, m.schwabSellFrom, m.schwabSellTo))
+    .map((t) => t.date)
+    .sort()[0];
   const schwab = store.snapshots.filter((s) => s.broker === 'schwab').sort((a, b) => a.date.localeCompare(b.date));
-  const before = schwab.filter((s) => s.date < from);
-  return before[before.length - 1] ?? schwab[schwab.length - 1];
+  const before = firstMigrationSell ? schwab.filter((s) => s.date < firstMigrationSell) : schwab;
+  return before[before.length - 1] ?? schwab[0];
 }
 
 function orderKey(t: Txn): number {

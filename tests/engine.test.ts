@@ -122,6 +122,55 @@ describe('遷移：延續成本', () => {
   });
 });
 
+describe('延續帳錨點', () => {
+  // 10/15 早上匯出持倉（含 CCC），當天稍晚賣掉 CCC、10/16 匯出部分現金；10/19 再匯出一次持倉
+  function anchorStore(extra: Txn[] = [], laterSnapshot = false): Store {
+    const s = emptyStore();
+    const snap = (date: string, rows: { symbol: string; qty: number; cost: number }[], cash: number) => ({
+      id: `schwab|${date}`,
+      broker: 'schwab' as const,
+      date,
+      cash,
+      total: 0,
+      source: 't',
+      rows: rows.map((r) => ({ symbol: r.symbol, name: r.symbol, qty: r.qty, price: 10, costBasis: r.cost, marketValue: 0 })),
+    });
+    s.snapshots.push(snap('2026-10-15', [{ symbol: 'AAA', qty: 10, cost: 80 }, { symbol: 'CCC', qty: 28, cost: 2800 }], 230));
+    s.snapshots.push(snap('2026-10-19', [{ symbol: 'AAA', qty: 10, cost: 80 }], 30));
+    if (laterSnapshot) s.snapshots.push(snap('2026-10-25', [], 2000));
+    s.prices = { AAA: { price: 10, date: '2026-10-19', source: 't' }, CCC: { price: 100, date: '2026-10-15', source: 't' } };
+    s.txns = [
+      tx({ broker: 'schwab', date: '2026-10-15', type: 'SELL', symbol: 'CCC', qty: 28, amount: 2815 }),
+      tx({ broker: 'schwab', date: '2026-10-16', type: 'WITHDRAW', amount: -3000 }),
+      tx({ broker: 'schwab', date: '2026-10-16', type: 'FEE', amount: -15 }),
+      ...extra,
+    ];
+    return s;
+  }
+
+  it('還沒有遷移賣出：用最新的持倉快照（不會殘留當天稍晚已賣掉的股票）', () => {
+    const led = computeLedgers(anchorStore(), '2026-10-20');
+    expect(led.anchor?.date).toBe('2026-10-19');
+    expect(Object.keys(led.continuous)).toEqual(['AAA']);
+    expect(led.schwabCash).toBeCloseTo(30, 2);
+  });
+
+  it('開始遷移賣出後：用第一筆賣出前的最後一份快照；之後匯出的空持倉不影響', () => {
+    const sell = tx({ broker: 'schwab', date: '2026-10-21', type: 'SELL', symbol: 'AAA', qty: 10, amount: 100 });
+    const led = computeLedgers(anchorStore([sell], true), '2026-10-26');
+    expect(led.anchor?.date).toBe('2026-10-19');
+    expect(led.pending[0]).toMatchObject({ symbol: 'AAA', qty: 10, originalCost: 80, proceeds: 100 });
+  });
+
+  it('Schwab 現金推算為負時提醒重新匯出', () => {
+    const s = anchorStore();
+    s.snapshots = s.snapshots.filter((x) => x.date === '2026-10-15');
+    s.txns.push(tx({ broker: 'schwab', date: '2026-10-17', type: 'WITHDRAW', amount: -500 }));
+    const r = buildReport(s, '2026-10-20');
+    expect(r.warnings.some((w) => w.includes('Schwab 現金推算為'))).toBe(true);
+  });
+});
+
 describe('股利', () => {
   // 合成數字：DDD 有 30% 預扣、GGG 不預扣、EEE 從沒觀察過預扣、FFF 只有實收淨額
   function divStore(): Store {

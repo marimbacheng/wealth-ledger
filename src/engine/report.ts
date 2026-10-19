@@ -232,6 +232,9 @@ export function buildReport(store: Store, asOf: string): Report {
 
   // ---------- 現金與總值 ----------
   const pendingProceeds = sum(led.pending.map((p) => p.proceeds));
+  if (led.schwabCash < -0.5) {
+    warnings.push(`Schwab 現金推算為 ${led.schwabCash.toFixed(2)}：持倉快照之後可能還有同一天的交易沒有反映，請重新匯出最新的 Positions 與 Transactions`);
+  }
   if (led.twCash < -0.5) warnings.push(`永豐現金推算為 ${led.twCash.toFixed(2)}：可能有匯入款（轉入）或交割款尚未登錄`);
   const totalValue = mvTotal + led.schwabCash + led.twCash;
 
