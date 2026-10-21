@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis } from 'recharts';
 import { ramp, type RampSpec } from './color';
-import { money, pct } from './format';
+import { compactMoney, money, pct } from './format';
 
 // 折線、長條只用驗證過的兩個分類色（series-1 石油藍、series-2 赭黃），其餘是文字與細線色。
 const C = {
@@ -13,7 +13,7 @@ const C = {
   muted: 'var(--muted)',
 };
 const tick = { fill: C.muted, fontSize: 11 };
-const compact = (n: number) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `$${n.toFixed(0)}`);
+const compact = (n: number) => compactMoney(n);
 
 // 目前是否為深色：使用者在頁首指定的外觀優先，沒指定就跟隨系統
 function isDarkNow(): boolean {

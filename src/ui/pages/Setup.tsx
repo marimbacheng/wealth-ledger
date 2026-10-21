@@ -7,7 +7,9 @@ import { upgrade } from '../../store/persist';
 import type { SyncApi } from '../../sync/useSync';
 import { Card, Notice } from '../components';
 import { SyncCard } from '../SyncCard';
-import { money, qty, today } from '../format';
+import { FxCard } from '../FxCard';
+import type { FxApi } from '../../fx/useFx';
+import { money, moneyIn, qty, today } from '../format';
 
 function download(name: string, text: string, type: string) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -30,7 +32,7 @@ const TXN_EXAMPLE = [
 const VALUE_EXAMPLE = [VALUE_HEADER.join(','), '2024-05-31,20000.00,5 月對帳單 Ending Account Value', '2024-06-30,20500.00,'].join('\n');
 const POS_EXAMPLE = [TW_POS_HEADER.join(','), '2026-11-30,VOO,VANGUARD S&P 500 ETF,10,5003.00,510.00,', '2026-11-30,KO,COCA-COLA,30,2103.00,72.00,'].join('\n');
 
-export function Setup({ store, report: r, update, importFiles, sync }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]>; sync: SyncApi }) {
+export function Setup({ store, report: r, update, importFiles, sync, fx }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]>; sync: SyncApi; fx: FxApi }) {
   const [results, setResults] = useState<ImportResult[]>([]);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -44,7 +46,7 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
     setResults(await importFiles([...list]));
   }
 
-  const setMig = (k: keyof typeof m) => (e: { target: { value: string } }) =>
+  const setMig = (k: Exclude<keyof typeof m, 'mappings'>) => (e: { target: { value: string } }) =>
     update((s) => {
       s.settings.migration[k] = e.target.value;
       return s;
@@ -151,6 +153,10 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
         <SyncCard sync={sync} />
       </div>
 
+      <div className="section">
+        <FxCard store={store} update={update} fx={fx} />
+      </div>
+
       <div className="grid two">
         <Card title="遷移設定" desc="在這段期間內的 Schwab 賣出與永豐買進會配對，用來把原始成本延續到新部位。">
           <div className="row">
@@ -190,12 +196,12 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
                 <tbody>
                   {r.migration.matches.map((x, i) => (
                     <tr key={i}>
-                      <td className="l">{x.symbol}</td>
+                      <td className="l">{x.fromSymbol && x.fromSymbol !== x.symbol ? `${x.fromSymbol} → ${x.symbol}` : x.symbol}</td>
                       <td>{qty(Number(x.qty.toFixed(4)))}</td>
-                      <td>{money(x.originalCost)}</td>
-                      <td>{money(x.proceeds)}</td>
-                      <td>{money(x.newCost)}</td>
-                      <td>{money(x.carriedCost)}</td>
+                      <td>{moneyIn(x.originalCost, x.currency)}</td>
+                      <td>{moneyIn(x.proceeds, x.currency)}</td>
+                      <td>{moneyIn(x.newCost, x.currency)}</td>
+                      <td>{moneyIn(x.carriedCost, x.currency)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -205,7 +211,7 @@ export function Setup({ store, report: r, update, importFiles, sync }: PageProps
           {r.migration.pending.length > 0 && (
             <Notice
               title="遷移中（已賣出、尚未買回）"
-              items={r.migration.pending.map((p) => `${p.symbol} ${qty(Number(p.qty.toFixed(4)))} 股，賣出所得 ${money(p.proceeds)}（${p.sellDate}）`)}
+              items={r.migration.pending.map((p) => `${p.symbol} ${qty(Number(p.qty.toFixed(4)))} 股，賣出所得 ${moneyIn(p.proceeds, p.currency)}（${p.sellDate}）`)}
             />
           )}
         </Card>

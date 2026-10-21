@@ -1,6 +1,6 @@
 # Cloudflare Pages 的回應標頭（GitHub Pages 會忽略這個檔案）
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://cdn.jsdelivr.net https://*.currency-api.pages.dev; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

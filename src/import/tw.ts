@@ -1,4 +1,4 @@
-import type { Broker, Txn, TxnType } from '../domain/types';
+import type { Broker, Currency, Txn, TxnType } from '../domain/types';
 import { emptyBatch, normalizeSymbol, type ImportBatch } from './batch';
 import { parseMoney, parseUsDate } from './csv';
 
@@ -19,6 +19,8 @@ export const TW_TXN_HEADER = [
   '稅後股利',
   '再投入',
   '備註',
+  '幣別', // 選填：USD／TWD；空白時依代號判斷（數字代號為台股、TWD）
+  '匯率', // 選填：交易當天 1 美元兌多少台幣；空白時自動抓
 ] as const;
 
 export const TW_POS_HEADER = ['日期', '代號', '名稱', '股數', '總成本', '現價', '市值'] as const;
@@ -38,7 +40,15 @@ const CATEGORY: Record<string, TxnType> = {
   轉出: 'TRANSFER_OUT',
   費用: 'FEE',
   利息: 'INTEREST',
+  期初持股: 'OPEN',
+  期初: 'OPEN',
 };
+
+function parseCurrency(v: string): Currency | undefined {
+  if (/^(twd|ntd|nt\$|台幣|新台幣)$/i.test(v)) return 'TWD';
+  if (/^(usd|us\$|美元|美金)$/i.test(v)) return 'USD';
+  return undefined;
+}
 
 const YES = /^(y|yes|是|1|true|v)$/i;
 
@@ -101,6 +111,8 @@ export function parseTwTransactions(rows: string[][], file: string): ImportBatch
     const symbol = symRaw ? normalizeSymbol(symRaw) : undefined;
     const name = get(r, '名稱') || undefined;
     if (symbol && name) b.securities[symbol] = { name };
+    const currency = parseCurrency(get(r, '幣別'));
+    const fxRaw = num(r, '匯率');
     const base = {
       broker,
       date,
@@ -108,7 +120,23 @@ export function parseTwTransactions(rows: string[][], file: string): ImportBatch
       description: name,
       source: 'tw-csv',
       note: get(r, '備註') || undefined,
+      ...(currency ? { currency } : {}),
+      ...(fxRaw && fxRaw > 0 ? { fx: fxRaw } : {}),
     };
+
+    // 期初持股：開始記帳前就有的部位，只記股數與總成本（金額欄），不影響現金
+    if (type === 'OPEN') {
+      const qty = num(r, '股數');
+      const given = num(r, '金額');
+      const price = num(r, '價格');
+      const cost = given != null ? Math.abs(given) : price != null && qty ? qty * price + Math.abs(num(r, '手續費') ?? 0) : undefined;
+      if (!symbol || !qty || cost == null) {
+        b.warnings.push(`第 ${line} 列：期初持股需要代號、股數與總成本（金額），略過`);
+        return;
+      }
+      b.txns.push({ ...base, type: 'OPEN', qty: Math.abs(qty), price: cost / Math.abs(qty), amount: -round2(cost), rawAction: '期初持股' });
+      return;
+    }
 
     if (type === 'BUY' || type === 'SELL') {
       const qty = num(r, '股數');

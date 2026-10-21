@@ -4,7 +4,8 @@ import type { TxnType } from '../../domain/types';
 import { parseTwTransactions, TW_TXN_HEADER } from '../../import/tw';
 import { mergeTxns } from '../../store/merge';
 import { Card, Notice } from '../components';
-import { money, qty, today } from '../format';
+import { txnCurrency } from '../../domain/currency';
+import { moneyIn, qty, today } from '../format';
 
 const TYPE_LABEL: Record<TxnType, string> = {
   BUY: '買進',
@@ -17,6 +18,7 @@ const TYPE_LABEL: Record<TxnType, string> = {
   TRANSFER_OUT: '轉出',
   TRANSFER_IN: '轉入',
   FEE: '費用',
+  OPEN: '期初持股',
   OTHER: '其他',
 };
 
@@ -43,6 +45,8 @@ const blank = (): Form => ({
   稅後股利: '',
   再投入: '',
   備註: '',
+  幣別: '',
+  匯率: '',
 });
 
 export function Ledger({ store, update }: PageProps) {
@@ -65,6 +69,7 @@ export function Ledger({ store, update }: PageProps) {
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const cat = form.類別;
   const isTrade = cat === '買進' || cat === '賣出';
+  const isOpen = cat === '期初持股';
   const isDiv = cat === '股利';
 
   // 手動新增走跟範本匯入同一套解析，規則只有一份
@@ -111,12 +116,12 @@ export function Ledger({ store, update }: PageProps) {
             <label className="field">
               類別
               <select value={form.類別} onChange={set('類別')}>
-                {['買進', '賣出', '股利', '轉入', '轉出', '入金', '出金', '費用', '利息'].map((c) => (
+                {['買進', '賣出', '股利', '轉入', '轉出', '入金', '出金', '費用', '利息', '期初持股'].map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
             </label>
-            {(isTrade || isDiv) && (
+            {(isTrade || isDiv || isOpen) && (
               <label className="field">
                 代號
                 <input value={form.代號} onChange={set('代號')} placeholder="AAPL" style={{ width: 90 }} />
@@ -163,12 +168,30 @@ export function Ledger({ store, update }: PageProps) {
                 </label>
               </>
             )}
+            {isOpen && (
+              <label className="field">
+                股數
+                <input type="number" step="any" value={form.股數} onChange={set('股數')} />
+              </label>
+            )}
             {!isTrade && !isDiv && (
               <label className="field">
-                金額
+                {isOpen ? '總成本' : '金額'}
                 <input type="number" step="any" value={form.金額} onChange={set('金額')} />
               </label>
             )}
+            <label className="field">
+              幣別
+              <select value={form.幣別} onChange={set('幣別')}>
+                <option value="">自動（數字代號為台幣）</option>
+                <option value="USD">美元</option>
+                <option value="TWD">台幣</option>
+              </select>
+            </label>
+            <label className="field">
+              匯率（選填）
+              <input type="number" step="any" value={form.匯率} onChange={set('匯率')} placeholder="自動抓" style={{ width: 100 }} />
+            </label>
             <label className="field">
               備註
               <input value={form.備註} onChange={set('備註')} />
@@ -244,9 +267,9 @@ export function Ledger({ store, update }: PageProps) {
                   </td>
                   <td className="l">{t.symbol ?? ''}</td>
                   <td>{t.qty != null ? qty(t.qty) : ''}</td>
-                  <td>{t.price != null ? money(t.price) : ''}</td>
-                  <td>{t.fee ? money(t.fee) : ''}</td>
-                  <td>{money(t.amount)}</td>
+                  <td>{t.price != null ? moneyIn(t.price, txnCurrency(t, store.securities)) : ''}</td>
+                  <td>{t.fee ? moneyIn(t.fee, txnCurrency(t, store.securities)) : ''}</td>
+                  <td>{moneyIn(t.amount, txnCurrency(t, store.securities))}</td>
                   <td className="l muted">{t.rawAction ?? ''}</td>
                   <td className="l muted">{SOURCE_LABEL[t.source] ?? t.source}</td>
                   <td>

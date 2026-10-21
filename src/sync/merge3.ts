@@ -59,7 +59,21 @@ export function merge3(base: Store | null, local: Store, remote: Store): Store {
     securities: mergeRecord(b.securities, local.securities, remote.securities),
     prices: mergeRecord(b.prices, local.prices, remote.prices),
     settings: mergeSettings(b.settings, local.settings, remote.settings),
+    fx: mergeFx(b.fx, local.fx, remote.fx),
   };
+}
+
+// 匯率：歷史依日期合併；目前匯率取日期較新的那一份（兩台裝置各自抓到時不分本機優先）
+function mergeFx(b?: Store['fx'], l?: Store['fx'], r?: Store['fx']): Store['fx'] {
+  const newer = (x?: Store['fx']['current'], y?: Store['fx']['current']) => {
+    if (!x) return y;
+    if (!y) return x;
+    const kx = `${x.date}|${x.fetchedAt ?? ''}`;
+    const ky = `${y.date}|${y.fetchedAt ?? ''}`;
+    return kx >= ky ? x : y;
+  };
+  const current = newer(l?.current, r?.current) ?? pick(b?.current, l?.current, r?.current);
+  return { ...(current ? { current } : {}), history: mergeRecord(b?.history ?? {}, l?.history ?? {}, r?.history ?? {}) };
 }
 
 type Rec = Record<string, unknown>;

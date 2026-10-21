@@ -1,4 +1,5 @@
-import type { Broker, Coverage, Store, Txn } from '../domain/types';
+import { txnCurrency } from '../domain/currency';
+import type { Broker, Coverage, Currency, Store, Txn } from '../domain/types';
 import { daysBetween, inRange, yearOf } from './dates';
 
 // 股利稅務狀態：
@@ -19,6 +20,7 @@ export interface DividendEvent {
   source: string;
   rawAction?: string;
   adjustment?: boolean; // 沒有對應股利的單獨稅務調整
+  currency: Currency;
 }
 
 export interface DividendTotals {
@@ -104,6 +106,7 @@ export function buildDividendEvents(store: Store): DividendEvent[] {
     net: d.amount,
     taxStatus: d.netOnly ? 'netOnly' : 'actual',
     reinvested: reinvested(d),
+    currency: txnCurrency(d, store.securities),
     source: d.source,
     rawAction: d.rawAction,
   }));
@@ -139,6 +142,7 @@ export function buildDividendEvents(store: Store): DividendEvent[] {
         source: t.source,
         rawAction: t.rawAction,
         adjustment: true,
+        currency: txnCurrency(t, store.securities),
       });
     }
   }

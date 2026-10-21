@@ -1,5 +1,6 @@
+import { currencyOf, currentRate, rateAt, txnCurrency } from '../domain/currency';
 import { metaFor } from '../domain/securities';
-import type { Broker, Store, Txn } from '../domain/types';
+import type { Broker, Currency, Store, Txn } from '../domain/types';
 import { inRange, yearOf } from './dates';
 import { buildDividendEvents, summarizeDividends, type DividendSummary, type DividendTotals } from './dividends';
 import { computeLedgers, type LedgerResult, type MigrationMatch, type PendingMigration } from './ledger';
@@ -17,15 +18,17 @@ export const DPS_SOURCE_LABEL: Record<DpsSource, string> = {
 export interface ForecastRow {
   symbol: string;
   qty: number;
-  dps: number; // 年化每股股利（稅前）
+  currency: Currency;
+  dps: number; // 年化每股股利（稅前，原幣別）
   dpsSource: DpsSource;
   rate: number;
   rateSource: 'override' | 'observed' | 'default';
-  gross: number;
+  gross: number; // 以下三項換算成美元
   tax: number;
   net: number;
 }
 
+// 報表裡的金額一律換算成美元（台幣部位用目前匯率）；native 保留原幣別，給對帳與每股價格用
 export interface HoldingRow {
   symbol: string;
   name: string;
@@ -48,6 +51,8 @@ export interface HoldingRow {
   drip?: { qty: number; cost: number; count: number };
   dividends?: DividendTotals;
   forecast: ForecastRow;
+  currency: Currency;
+  native: { marketValue: number; contCost: number; brokerCost: number; schwabCost: number; twCost: number };
 }
 
 export interface Report {
@@ -65,7 +70,9 @@ export interface Report {
     twGain: number;
     schwabValue: number;
     schwabCash: number;
-    twCash: number;
+    twCash: number; // 永豐現金合計（美元＋台幣換算）
+    twCashUSD: number;
+    twCashTWD: number; // 原幣別
     pendingProceeds: number;
     totalValue: number;
   };
@@ -98,6 +105,7 @@ export interface Report {
   valueSeries: { date: string; value: number; contribution?: number; source: string }[];
   migration: { matches: MigrationMatch[]; pending: PendingMigration[] };
   coverage: { label: string; from: string; to: string }[];
+  fx?: { rate: number; date?: string; source?: string };
   warnings: string[];
   ledgers: LedgerResult;
 }
@@ -108,11 +116,12 @@ function emptyTotals(): DividendTotals {
   return { gross: 0, tax: 0, net: 0, count: 0, estimatedCount: 0, netOnlyCount: 0 };
 }
 
-// 外部資金流：Schwab 在遷移期間的匯出視為券商間移轉，不算提領
+// 外部資金流：Schwab 在遷移期間的匯出視為券商間移轉，不算提領；
+// 期初持股是帳外帶進來的部位，以成本當作當天投入
 export function externalFlows(store: Store): Txn[] {
   const m = store.settings.migration;
   return store.txns.filter((t) => {
-    if (t.type === 'DEPOSIT') return true;
+    if (t.type === 'DEPOSIT' || t.type === 'OPEN') return true;
     if (t.type !== 'WITHDRAW') return false;
     return !(t.broker === 'schwab' && inRange(t.date, m.schwabSellFrom, m.twBuyTo));
   });
@@ -139,9 +148,24 @@ function frequencyFrom(count: number): number {
 
 export function buildReport(store: Store, asOf: string): Report {
   const led = computeLedgers(store, asOf);
-  const events = buildDividendEvents(store).filter((e) => e.date <= asOf);
-  const div = summarizeDividends(events, asOf);
   const warnings = [...led.warnings];
+  // 目前匯率：台幣部位、台幣股利、台幣現金換算成美元用
+  const rateNow = currentRate(store);
+  const usesTwd = store.txns.some((t) => txnCurrency(t, store.securities) === 'TWD') || Object.keys(store.prices).some((sym) => currencyOf(sym, store.securities) === 'TWD');
+  if (usesTwd && !rateNow) warnings.push('尚未取得美元／台幣匯率，台幣部位暫時以 0 計入合計；請到「設定」更新匯率');
+  const k = (c: Currency) => (c === 'USD' ? 1 : rateNow ? 1 / rateNow : 0);
+  // 歷史金流（入金、提領、期初持股）用發生當天的匯率；投入為正
+  const flowUSD = (t: Txn) => {
+    const amt = t.type === 'OPEN' ? Math.abs(t.amount) : t.amount;
+    const c = txnCurrency(t, store.securities);
+    if (c === 'USD') return amt;
+    const r = t.fx ?? rateAt(store, t.date);
+    return r ? amt / r : 0;
+  };
+  const events = buildDividendEvents(store)
+    .filter((e) => e.date <= asOf)
+    .map((e) => (e.currency === 'USD' ? e : { ...e, gross: e.gross != null ? e.gross * k(e.currency) : undefined, tax: e.tax * k(e.currency), net: e.net * k(e.currency) }));
+  const div = summarizeDividends(events, asOf);
 
   // ---------- 持股 ----------
   const symbols = new Set([...Object.keys(led.schwab), ...Object.keys(led.tw), ...Object.keys(led.continuous)]);
@@ -158,12 +182,17 @@ export function buildReport(store: Store, asOf: string): Report {
     const qty = (sp?.qty ?? 0) + (tp?.qty ?? 0);
     if (qty <= 1e-6) continue;
     const meta = metaFor(symbol, store.securities);
+    const cur = currencyOf(symbol, store.securities);
+    const kk = k(cur);
     const quote = store.prices[symbol];
     const price = quote?.price;
     if (price == null) warnings.push(`${symbol} 沒有價格，市值以 0 計；請在「設定」輸入現價或匯入最新持倉`);
-    const mv = (price ?? 0) * qty;
-    const brokerCost = (sp?.cost ?? 0) + (tp?.cost ?? 0);
-    const contCost = cp?.cost ?? brokerCost;
+    const mvN = (price ?? 0) * qty;
+    const brokerCostN = (sp?.cost ?? 0) + (tp?.cost ?? 0);
+    const contCostN = cp?.cost ?? brokerCostN;
+    const mv = mvN * kk;
+    const brokerCost = brokerCostN * kk;
+    const contCost = contCostN * kk;
     if (cp && Math.abs(cp.qty - qty) > 1e-4) {
       warnings.push(`${symbol} 延續帳股數 ${cp.qty.toFixed(4)} 與券商合計 ${qty.toFixed(4)} 不一致`);
     }
@@ -187,11 +216,12 @@ export function buildReport(store: Store, asOf: string): Report {
       dps = lastDiv.get(symbol)! * frequencyFrom(ttm?.count ?? 0);
       dpsSource = 'last-div';
     }
-    if (dpsSource === 'none' && ttm && ttm.gross > 0) {
-      dps = ttm.gross / qty;
+    if (dpsSource === 'none' && ttm && ttm.gross > 0 && kk > 0) {
+      dps = ttm.gross / kk / qty; // ttm 已換成美元，每股股利用原幣
       dpsSource = 'ttm';
     }
-    let rate = store.settings.defaultWithholding;
+    // 台股股利在台灣不預扣（另計二代健保與綜所稅），預設 0；美股預設 30%
+    let rate = cur === 'TWD' ? 0 : store.settings.defaultWithholding;
     let rateSource: ForecastRow['rateSource'] = 'default';
     if (meta.withholdingOverride != null) {
       rate = meta.withholdingOverride;
@@ -200,7 +230,7 @@ export function buildReport(store: Store, asOf: string): Report {
       rate = div.rates[symbol];
       rateSource = 'observed';
     }
-    const gross = dps * qty;
+    const gross = dps * qty * kk;
 
     rows.push({
       symbol,
@@ -216,14 +246,16 @@ export function buildReport(store: Store, asOf: string): Report {
       weight: 0,
       contCost,
       contGain: mv - contCost,
-      schwabCost: sp?.cost ?? 0,
+      schwabCost: (sp?.cost ?? 0) * kk,
       brokerCost,
       brokerGain: mv - brokerCost,
-      twCost: tp?.cost ?? 0,
-      twValue: (price ?? 0) * (tp?.qty ?? 0),
+      twCost: (tp?.cost ?? 0) * kk,
+      twValue: (price ?? 0) * (tp?.qty ?? 0) * kk,
       drip: led.drip[symbol],
       dividends: div.bySymbol[symbol]?.totals,
-      forecast: { symbol, qty, dps, dpsSource, rate, rateSource, gross, tax: gross * rate, net: gross * (1 - rate) },
+      forecast: { symbol, qty, currency: cur, dps, dpsSource, rate, rateSource, gross, tax: gross * rate, net: gross * (1 - rate) },
+      currency: cur,
+      native: { marketValue: mvN, contCost: contCostN, brokerCost: brokerCostN, schwabCost: sp?.cost ?? 0, twCost: tp?.cost ?? 0 },
     });
   }
   const mvTotal = sum(rows.map((r) => r.marketValue));
@@ -235,8 +267,10 @@ export function buildReport(store: Store, asOf: string): Report {
   if (led.schwabCash < -0.5) {
     warnings.push(`Schwab 現金推算為 ${led.schwabCash.toFixed(2)}：持倉快照之後可能還有同一天的交易沒有反映，請重新匯出最新的 Positions 與 Transactions`);
   }
-  if (led.twCash < -0.5) warnings.push(`永豐現金推算為 ${led.twCash.toFixed(2)}：可能有匯入款（轉入）或交割款尚未登錄`);
-  const totalValue = mvTotal + led.schwabCash + led.twCash;
+  if (led.twCash < -0.5) warnings.push(`永豐美元現金推算為 ${led.twCash.toFixed(2)}：可能有匯入款（轉入）或交割款尚未登錄`);
+  if (led.twCashTWD < -1) warnings.push(`永豐台幣現金推算為 ${Math.round(led.twCashTWD).toLocaleString()}：台股買進的台幣來源（入金或換匯）尚未登錄`);
+  const twCashAll = led.twCash + led.twCashTWD * k('TWD');
+  const totalValue = mvTotal + led.schwabCash + twCashAll;
 
   const totals: Report['totals'] = {
     marketValue: mvTotal,
@@ -247,9 +281,11 @@ export function buildReport(store: Store, asOf: string): Report {
     twValue: sum(rows.map((r) => r.twValue)),
     twCost: sum(rows.map((r) => r.twCost)),
     twGain: sum(rows.map((r) => r.twValue - r.twCost)),
-    schwabValue: sum(rows.map((r) => (r.price ?? 0) * r.schwabQty)),
+    schwabValue: sum(rows.map((r) => (r.price ?? 0) * r.schwabQty * k(r.currency))),
     schwabCash: led.schwabCash,
-    twCash: led.twCash,
+    twCash: twCashAll,
+    twCashUSD: led.twCash,
+    twCashTWD: led.twCashTWD,
     pendingProceeds,
     totalValue,
   };
@@ -264,9 +300,9 @@ export function buildReport(store: Store, asOf: string): Report {
   const schwabReported = store.realized.filter((r) => r.broker === 'schwab').map((r) => ({ date: r.closedDate, gain: r.gain }));
   const contEvents = [
     ...schwabReported.filter((r) => r.date <= anchorDate),
-    ...led.realized.filter((r) => r.ledger === 'continuous').map((r) => ({ date: r.date, gain: r.gain })),
+    ...led.realized.filter((r) => r.ledger === 'continuous').map((r) => ({ date: r.date, gain: r.gain * k(r.currency) })),
   ];
-  const twEvents = led.realized.filter((r) => r.ledger === 'tw').map((r) => ({ date: r.date, gain: r.gain }));
+  const twEvents = led.realized.filter((r) => r.ledger === 'tw').map((r) => ({ date: r.date, gain: r.gain * k(r.currency) }));
   const realized: Report['realized'] = {
     continuous: sum(contEvents.map((x) => x.gain)),
     continuousByYear: byYear(contEvents),
@@ -307,9 +343,9 @@ export function buildReport(store: Store, asOf: string): Report {
   // ---------- 總報酬 ----------
   const cashTx = store.txns.filter((t) => t.date <= asOf && t.source !== 'schwab-income');
   // 利息扣掉沒有代號的預扣稅（Schwab 對現金利息的 NRA 預扣）
-  const interest = sum(cashTx.filter((t) => t.type === 'INTEREST' || (t.type === 'TAX' && !t.symbol)).map((t) => t.amount));
-  const fees = -sum(cashTx.filter((t) => t.type === 'FEE').map((t) => t.amount));
-  const pendingMigration = sum(led.pending.map((p) => p.proceeds - p.originalCost));
+  const interest = sum(cashTx.filter((t) => t.type === 'INTEREST' || (t.type === 'TAX' && !t.symbol)).map((t) => t.amount * k(txnCurrency(t, store.securities))));
+  const fees = -sum(cashTx.filter((t) => t.type === 'FEE').map((t) => t.amount * k(txnCurrency(t, store.securities))));
+  const pendingMigration = sum(led.pending.map((p) => (p.proceeds - p.originalCost) * k(p.currency)));
   const total = totals.contGain + realized.continuous + pendingMigration + div.total.net + interest - fees;
   const tr: Report['totalReturn'] = {
     unrealized: totals.contGain,
@@ -324,7 +360,7 @@ export function buildReport(store: Store, asOf: string): Report {
   const flows = externalFlows(store).filter((t) => t.date <= asOf);
   const contribAt = (date: string) =>
     (opening && date >= opening.date ? opening.amount : 0) +
-    sum(flows.filter((t) => t.date <= date && (!opening || t.date > opening.date)).map((t) => t.amount));
+    sum(flows.filter((t) => t.date <= date && (!opening || t.date > opening.date)).map(flowUSD));
   if (opening) {
     const nc = contribAt(asOf);
     tr.netContribution = nc;
@@ -332,7 +368,7 @@ export function buildReport(store: Store, asOf: string): Report {
     tr.residual = tr.gainByContribution - total;
     const xf: Flow[] = [
       { date: opening.date, amount: -opening.amount },
-      ...flows.filter((t) => t.date > opening.date).map((t) => ({ date: t.date, amount: -t.amount })),
+      ...flows.filter((t) => t.date > opening.date).map((t) => ({ date: t.date, amount: -flowUSD(t) })),
       { date: asOf, amount: totalValue },
     ];
     tr.xirr = xirr(xf);
@@ -342,7 +378,7 @@ export function buildReport(store: Store, asOf: string): Report {
   const group = (key: (r: HoldingRow) => string) => {
     const m = new Map<string, number>();
     for (const r of rows) m.set(key(r), (m.get(key(r)) ?? 0) + r.marketValue);
-    const cash = led.schwabCash + Math.max(0, led.twCash);
+    const cash = led.schwabCash + Math.max(0, twCashAll);
     if (cash > 0.5) m.set('現金', (m.get('現金') ?? 0) + cash);
     const tot = sum([...m.values()]);
     return [...m.entries()].map(([name, value]) => ({ name, value, weight: tot > 0 ? value / tot : 0 })).sort((a, b) => b.value - a.value);
@@ -380,6 +416,7 @@ export function buildReport(store: Store, asOf: string): Report {
     valueSeries,
     migration: { matches: led.matches, pending: led.pending },
     coverage,
+    ...(rateNow ? { fx: { rate: rateNow, date: store.fx?.current?.date, source: store.fx?.current?.source } } : {}),
     warnings,
     ledgers: led,
   };

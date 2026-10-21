@@ -3,7 +3,7 @@ import type { PageProps } from '../../App';
 import type { HoldingRow } from '../../engine/report';
 import { Card, Gain, Notice, Seg } from '../components';
 import { holdingsCsv, holdingsMarkdown } from '../exportHoldings';
-import { money, pct, qty, today } from '../format';
+import { money, moneyIn, pct, qty, today } from '../format';
 
 type View = 'all' | 'actual' | 'cont';
 type Dir = 'asc' | 'desc';
@@ -54,15 +54,16 @@ export function Holdings({ report: r }: PageProps) {
       foot: '合計',
     },
     { key: 'sector', label: '產業', text: true, sortValue: (h) => h.sector, cell: (h) => h.sector },
+    { key: 'currency', label: '幣別', text: true, sortValue: (h) => h.currency, cell: (h) => (h.currency === 'TWD' ? '台幣' : '美元') },
     { key: 'qty', label: '股數', sortValue: (h) => h.qty, cell: (h) => qty(Number(h.qty.toFixed(4))) },
-    { key: 'price', label: '現價', sortValue: (h) => h.price ?? -Infinity, cell: (h) => (h.price != null ? money(h.price) : '—') },
+    { key: 'price', label: '現價', sortValue: (h) => (h.price ?? -Infinity) / (h.currency === 'TWD' ? (r.fx?.rate ?? 1) : 1), cell: (h) => (h.price != null ? moneyIn(h.price, h.currency) : '—') },
     { key: 'marketValue', label: '市值', sortValue: (h) => h.marketValue, cell: (h) => money(h.marketValue), foot: money(t.marketValue) },
     { key: 'weight', label: '比重', sortValue: (h) => h.weight, cell: (h) => pct(h.weight, 1), foot: '100%' },
     // 實際成本：各券商帳上
     { key: 'schwabCost', label: 'Schwab 成本', group: 'actual', sortValue: (h) => h.schwabCost, cell: (h) => (h.schwabQty > 0 ? money(h.schwabCost) : '—'), foot: money(schwabCostTotal) },
     { key: 'twCost', label: '永豐成本', group: 'actual', sortValue: (h) => h.twCost, cell: (h) => (h.twQty > 0 ? money(h.twCost) : '—'), foot: money(t.twCost) },
     { key: 'brokerCost', label: '總成本', group: 'actual', sortValue: (h) => h.brokerCost, cell: (h) => money(h.brokerCost), foot: money(t.brokerCost) },
-    { key: 'brokerAvg', label: '均價', group: 'actual', sortValue: (h) => avg(h.brokerCost, h.qty), cell: (h) => money(avg(h.brokerCost, h.qty)) },
+    { key: 'brokerAvg', label: '均價', group: 'actual', sortValue: (h) => avg(h.brokerCost, h.qty), cell: (h) => moneyIn(avg(h.native.brokerCost, h.qty), h.currency) },
     {
       key: 'brokerGain',
       label: '帳面盈虧（總成本）',
@@ -81,7 +82,7 @@ export function Holdings({ report: r }: PageProps) {
     },
     // 延續成本：含 Schwab 時期
     { key: 'contCost', label: '延續成本', group: 'cont', sortValue: (h) => h.contCost, cell: (h) => money(h.contCost), foot: money(t.contCost) },
-    { key: 'contAvg', label: '延續均價', group: 'cont', sortValue: (h) => avg(h.contCost, h.qty), cell: (h) => money(avg(h.contCost, h.qty)) },
+    { key: 'contAvg', label: '延續均價', group: 'cont', sortValue: (h) => avg(h.contCost, h.qty), cell: (h) => moneyIn(avg(h.native.contCost, h.qty), h.currency) },
     {
       key: 'contGain',
       label: '帳面盈虧（延續成本）',
@@ -140,7 +141,7 @@ export function Holdings({ report: r }: PageProps) {
   return (
     <Card
       title="持股明細"
-      desc="總成本 = 各券商帳上的實際成本（Schwab＋永豐），用於報稅與對帳；延續成本 = Schwab 時期的原始成本延續到永豐，用於長期報酬與成本殖利率。點欄位名稱可排序。"
+      desc="總成本 = 各券商帳上的實際成本（Schwab＋永豐），用於報稅與對帳；延續成本 = Schwab 時期的原始成本延續到永豐，用於長期報酬與成本殖利率。現價、均價用原幣別；其餘金額依頁首選的幣別顯示（台股依匯率換算）。點欄位名稱可排序。"
     >
       <div className="row" style={{ marginBottom: 10, justifyContent: 'space-between' }}>
         <Seg

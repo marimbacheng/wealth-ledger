@@ -30,6 +30,21 @@ const ETF: Record<string, string> = {
   JEPI: 'ETF：美股高股息',
   VNQ: 'ETF：不動產',
 };
+// 台股（數字代號）
+const TW_STOCK: Record<string, [string, string]> = {
+  '2330': ['台積電', '資訊科技'],
+  '2317': ['鴻海', '資訊科技'],
+  '2454': ['聯發科', '資訊科技'],
+  '2881': ['富邦金', '金融'],
+  '2882': ['國泰金', '金融'],
+};
+const TW_ETF: Record<string, [string, string]> = {
+  '0050': ['元大台灣50', 'ETF：台股大盤'],
+  '006208': ['富邦台50', 'ETF：台股大盤'],
+  '0056': ['元大高股息', 'ETF：台股高股息'],
+  '00878': ['國泰永續高股息', 'ETF：台股高股息'],
+  '00713': ['元大台灣高息低波', 'ETF：台股高股息'],
+};
 const BOND_ETF: Record<string, string> = {
   SGOV: 'ETF：短期美債',
   BIL: 'ETF：短期美債',
@@ -45,12 +60,16 @@ for (const [sector, list] of Object.entries(SECTORS)) {
 }
 for (const [sym, sector] of Object.entries(ETF)) DEFAULT_META[sym] = { sector, assetClass: 'ETF' };
 for (const [sym, sector] of Object.entries(BOND_ETF)) DEFAULT_META[sym] = { sector, assetClass: '債券 ETF' };
+for (const [sym, [, sector]] of Object.entries(TW_STOCK)) DEFAULT_META[sym] = { sector, assetClass: '台股' };
+for (const [sym, [, sector]] of Object.entries(TW_ETF)) DEFAULT_META[sym] = { sector, assetClass: '台股 ETF' };
+export const DEFAULT_NAMES: Record<string, string> = Object.fromEntries([...Object.entries(TW_STOCK), ...Object.entries(TW_ETF)].map(([k, [n]]) => [k, n]));
 
 export function metaFor(symbol: string, user: Record<string, SecurityMeta>): SecurityMeta & { sector: string; assetClass: string } {
   const d = DEFAULT_META[symbol];
   const u = user[symbol] ?? {};
   return {
     ...u,
+    name: u.name || DEFAULT_NAMES[symbol],
     sector: u.sector || d?.sector || '未分類',
     assetClass: u.assetClass || d?.assetClass || '未分類',
   };

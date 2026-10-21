@@ -4,7 +4,8 @@ import { buildReport } from './engine/report';
 import { decodeBytes, importText, KIND_LABEL, type ImportKind } from './import';
 import { mergeBatch } from './store/merge';
 import { loadStore, saveStore } from './store/persist';
-import { today } from './ui/format';
+import { setDisplay, today } from './ui/format';
+import { useFx } from './fx/useFx';
 import { Dividends } from './ui/pages/Dividends';
 import { Holdings } from './ui/pages/Holdings';
 import { Ledger } from './ui/pages/Ledger';
@@ -60,6 +61,8 @@ export default function App() {
   const [updown, setUpdown] = useState(() => readPref('updown-v2', 'us'));
   // 外觀：auto 跟隨系統，light／dark 由使用者指定
   const [theme, setTheme] = useState(() => readPref('theme', 'auto'));
+  // 顯示幣別：報表一律以美元計算，切到台幣時用目前匯率換算
+  const [dispCur, setDispCur] = useState(() => (readPref('displayCurrency', 'USD') === 'TWD' ? 'TWD' : 'USD') as 'USD' | 'TWD');
   const asOf = today();
 
   useEffect(() => {
@@ -77,7 +80,9 @@ export default function App() {
 
   const report = useMemo(() => buildReport(store, asOf), [store, asOf]);
   const sync = useSync(store, setStore);
+  setDisplay(dispCur, report.fx?.rate);
   const update = useCallback((fn: (s: Store) => Store) => setStore((s) => fn(structuredClone(s))), []);
+  const fx = useFx(store, update);
 
   // 匯入要同步回傳結果，所以從 ref 取目前資料、算完再一次 setStore（不能放在 updater 裡，StrictMode 會跑兩次）
   const storeRef = useRef(store);
@@ -124,11 +129,28 @@ export default function App() {
           <h1>跨券商總報酬帳</h1>
           <div className="meta">
             資料日 {asOf}
-            {report.anchorDate && `　延續帳起算 ${report.anchorDate}`}　單位 USD
+            {report.anchorDate && `　延續帳起算 ${report.anchorDate}`}
+            {dispCur === 'TWD' && report.fx ? `　單位 TWD（1 美元 = ${report.fx.rate} 台幣）` : '　單位 USD'}
           </div>
         </div>
         <div className="controls">
           <SyncBadge sync={sync} onClick={() => setTab('setup')} />
+          <label className="controls" title={report.fx ? `1 美元 = ${report.fx.rate} 台幣（${report.fx.date ?? ''}）` : '尚未取得匯率'}>
+            幣別
+            <select
+              value={dispCur}
+              onChange={(e) => {
+                const v = e.target.value === 'TWD' ? 'TWD' : 'USD';
+                setDispCur(v);
+                writePref('displayCurrency', v);
+              }}
+            >
+              <option value="USD">美元</option>
+              <option value="TWD" disabled={!report.fx}>
+                台幣
+              </option>
+            </select>
+          </label>
           <label className="controls">
             外觀
             <select
@@ -177,7 +199,7 @@ export default function App() {
           {tab === 'holdings' && <Holdings {...props} />}
           {tab === 'dividends' && <Dividends {...props} />}
           {tab === 'ledger' && <Ledger {...props} />}
-          {tab === 'setup' && <Setup {...props} importFiles={importFiles} sync={sync} />}
+          {tab === 'setup' && <Setup {...props} importFiles={importFiles} sync={sync} fx={fx} />}
         </>
       )}
       <div className="footer">資料只儲存在這台裝置的瀏覽器（localStorage），不會上傳。換裝置或清除瀏覽資料前請下載備份。</div>

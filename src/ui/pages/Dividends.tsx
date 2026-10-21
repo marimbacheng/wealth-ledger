@@ -3,7 +3,7 @@ import type { PageProps } from '../../App';
 import { DPS_SOURCE_LABEL } from '../../engine/report';
 import { DividendYearChart } from '../charts';
 import { Card, Kpi, TaxBadge, TotalsBadge } from '../components';
-import { money, pct, qty } from '../format';
+import { money, moneyIn, pct, qty } from '../format';
 
 export function Dividends({ report: r, store }: PageProps) {
   const d = r.dividends;
@@ -106,7 +106,7 @@ export function Dividends({ report: r, store }: PageProps) {
                     <tr key={h.symbol}>
                       <td className="l">{h.symbol}</td>
                       <td>{qty(f.qty)}</td>
-                      <td>{money(f.dps)}</td>
+                      <td>{moneyIn(f.dps, f.currency)}</td>
                       <td className="l">
                         <span className={`badge ${f.dpsSource === 'none' ? 'est' : ''}`}>{DPS_SOURCE_LABEL[f.dpsSource]}</span>
                       </td>

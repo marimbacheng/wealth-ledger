@@ -7,6 +7,9 @@
 
 export type Broker = 'schwab' | 'tw';
 
+// 交易與部位的幣別：美股用 USD，台股（數字代號，如 2330、006208）用 TWD
+export type Currency = 'USD' | 'TWD';
+
 export type TxnType =
   | 'BUY'
   | 'SELL'
@@ -18,6 +21,7 @@ export type TxnType =
   | 'TRANSFER_OUT' // 券商間移轉：匯出（不計入淨投入）
   | 'TRANSFER_IN' // 券商間移轉：匯入
   | 'FEE' // 未計入成本的費用（電匯費、股利處理費…）
+  | 'OPEN' // 期初持股：開始記帳前就已持有的部位（只有股數與成本，沒有現金流）
   | 'OTHER';
 
 export interface Txn {
@@ -36,6 +40,8 @@ export interface Txn {
   rawAction?: string;
   source: string; // schwab-transactions | schwab-income | tw-csv | manual
   note?: string;
+  currency?: Currency; // 沒填時依代號判斷（數字代號為 TWD）
+  fx?: number; // 交易當天匯率（1 美元兌多少台幣），台幣交易才需要
 }
 
 export interface PositionRow {
@@ -98,6 +104,7 @@ export interface SecurityMeta {
   assetClass?: string;
   dpsOverride?: number; // 使用者手動設定的年化每股股利（稅前）
   withholdingOverride?: number; // 0~1
+  currency?: Currency; // 覆寫幣別判斷
 }
 
 export interface PriceQuote {
@@ -106,11 +113,25 @@ export interface PriceQuote {
   source: string;
 }
 
+// 跨市場對應：Schwab 賣出 from、在永豐買回 to；1 股 from = ratio 股 to（例：1 股 TSM ADR = 5 股 2330）
+export interface SymbolMapping {
+  from: string;
+  to: string;
+  ratio: number;
+}
+
 export interface MigrationSettings {
   schwabSellFrom: string;
   schwabSellTo: string;
   twBuyFrom: string;
   twBuyTo: string;
+  mappings: SymbolMapping[];
+}
+
+// 匯率：1 美元兌多少台幣。history 依日期快取，也供交易當天換算
+export interface FxState {
+  current?: { rate: number; date: string; source: string; fetchedAt?: string };
+  history: Record<string, number>;
 }
 
 export interface Settings {
@@ -147,6 +168,7 @@ export interface Store {
   coverage: Coverage[];
   settings: Settings;
   imports: ImportLogEntry[];
+  fx: FxState;
 }
 
 export function emptyStore(): Store {
@@ -166,9 +188,11 @@ export function emptyStore(): Store {
         schwabSellTo: '2026-12-31',
         twBuyFrom: '2026-10-16',
         twBuyTo: '2027-01-31',
+        mappings: [{ from: 'TSM', to: '2330', ratio: 5 }],
       },
       defaultWithholding: 0.3,
     },
     imports: [],
+    fx: { history: {} },
   };
 }
