@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 import type { DividendTotals, TaxStatus } from '../engine/dividends';
 import { money, pct, tone } from './format';
 
-export function Card(props: { title?: ReactNode; desc?: ReactNode; children: ReactNode; className?: string }) {
+export function Card(props: { title?: ReactNode; desc?: ReactNode; children: ReactNode; className?: string; id?: string }) {
   return (
-    <section className={`card ${props.className ?? ''}`}>
+    <section id={props.id} className={`card ${props.className ?? ''}`}>
       {props.title && <h2>{props.title}</h2>}
       {props.desc && <p className="desc">{props.desc}</p>}
       {props.children}
@@ -13,9 +13,9 @@ export function Card(props: { title?: ReactNode; desc?: ReactNode; children: Rea
 }
 
 // 報告式區塊：上緣粗細線 + 編號 + 襯線標題
-export function Section(props: { no?: string; title: ReactNode; aside?: ReactNode; children: ReactNode }) {
+export function Section(props: { no?: string; title: ReactNode; aside?: ReactNode; children: ReactNode; id?: string }) {
   return (
-    <section className="section">
+    <section id={props.id} className="section">
       <div className="section-head">
         {props.no && <span className="no">{props.no}</span>}
         <h2>{props.title}</h2>

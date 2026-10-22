@@ -74,6 +74,31 @@ export default function App() {
     setSaveFailed(!saveStore(store));
   }, [store]);
   useEffect(() => writePref('tab', tab), [tab]);
+  // 從總覽小卡跳過去：切換頁面後捲到目標區塊，短暫標示
+  const [focus, setFocus] = useState<string>();
+  const go = useCallback((t: Tab, target?: string) => {
+    setTab(t);
+    setFocus(target);
+  }, []);
+  useEffect(() => {
+    if (!focus) return;
+    // 等新頁面畫好再捲（用計時器而不是 requestAnimationFrame：分頁在背景時後者會暫停）
+    const id = setTimeout(() => {
+      const el = document.getElementById(focus);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'center' });
+        // 有些環境（例如背景視窗、省電模式）平滑捲動不會動：0.7 秒後還沒到就直接跳過去
+        setTimeout(() => {
+          const top = el.getBoundingClientRect().top;
+          if (top < -4 || top > 80) el.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'center' });
+        }, 700);
+        el.classList.add('flash');
+        setTimeout(() => el.classList.remove('flash'), 1600);
+      }
+      setFocus(undefined);
+    }, 30);
+    return () => clearTimeout(id);
+  }, [focus, tab]);
   useEffect(() => {
     document.documentElement.dataset.updown = updown;
   }, [updown]);
@@ -205,7 +230,7 @@ export default function App() {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview {...props} analytics={analytics} />}
+          {tab === 'overview' && <Overview {...props} analytics={analytics} go={go} />}
           {tab === 'holdings' && <Holdings {...props} quotes={quotes} analytics={analytics} />}
           {tab === 'dividends' && <Dividends {...props} />}
           {tab === 'ledger' && <Ledger {...props} />}

@@ -930,3 +930,96 @@ th.sortable:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* 小卡：整格可點、ⓘ 展開說明、每月股息長條 */
+.tile.link {
+  cursor: pointer;
+  border-radius: 4px;
+  margin: -4px -6px 0;
+  padding: 10px 6px 4px;
+  transition: background 0.15s;
+}
+.tile.link:hover,
+.tile.link:focus-visible {
+  background: var(--soft);
+  outline: none;
+}
+.tile-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.info-btn {
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+.info-btn[aria-expanded='true'] {
+  color: var(--ink);
+}
+.tile-go {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+.tile-info {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  cursor: default;
+}
+.mbars {
+  margin-top: 10px;
+}
+.mbars-plot {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 2px;
+  height: 30px;
+  align-items: end;
+}
+.mbar {
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.mbar span {
+  display: block;
+  width: 100%;
+  background: var(--series-1);
+  border-radius: 2px 2px 0 0;
+}
+.mbars-axis {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+  white-space: nowrap;
+}
+.mbars-axis span:last-child {
+  text-align: right;
+}
+.flash {
+  animation: flash 1.6s ease-out;
+}
+@keyframes flash {
+  0% {
+    background: color-mix(in oklab, var(--series-1) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.section,
+.card {
+  scroll-margin-top: 12px;
+}

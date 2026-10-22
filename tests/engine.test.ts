@@ -392,3 +392,31 @@ describe('今日漲跌', () => {
     expect(buildReport(s, '2026-10-22').holdings[0].day).toBeUndefined();
   });
 });
+
+describe('每月預估股息', () => {
+  // 年化預估由「最近一次 × 年配息次數」或近 12 個月實領算；這裡只檢查分配到月份
+  it('照過去一年實際入帳的月份分配；合計等於年度預估', () => {
+    const s = emptyStore();
+    s.snapshots.push({ id: 'schwab|2026-10-19', broker: 'schwab', date: '2026-10-19', cash: 0, total: 0, source: 't', rows: [{ symbol: 'AAA', name: 'AAA', qty: 10, price: 100, costBasis: 800, marketValue: 1000 }] });
+    s.prices = { AAA: { price: 100, date: '2026-10-22', source: 't' } };
+    s.settings.defaultWithholding = 0;
+    s.txns = ['2025-12-15', '2026-03-15', '2026-06-15', '2026-09-15'].map((date) => tx({ broker: 'schwab', date, type: 'DIV', symbol: 'AAA', amount: 5 }));
+    const f = buildReport(s, '2026-10-22').forecast;
+    expect(f.monthly.map((m) => m.month)).toEqual(['2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06', '2027-07', '2027-08', '2027-09', '2027-10']);
+    const by = Object.fromEntries(f.monthly.map((m) => [m.month.slice(5), +m.net.toFixed(6)]));
+    expect(by['12']).toBeCloseTo(f.net / 4, 6);
+    expect(by['03']).toBeCloseTo(f.net / 4, 6);
+    expect(by['11']).toBe(0);
+    expect(f.monthly.reduce((a, m) => a + m.net, 0)).toBeCloseTo(f.net, 6);
+  });
+
+  it('沒有預估也沒有配息紀錄（手動填每股股利）：平均分到 12 個月', () => {
+    const s = emptyStore();
+    s.snapshots.push({ id: 'schwab|2026-10-19', broker: 'schwab', date: '2026-10-19', cash: 0, total: 0, source: 't', rows: [{ symbol: 'BBB', name: 'BBB', qty: 12, price: 50, costBasis: 500, marketValue: 600 }] });
+    s.prices = { BBB: { price: 50, date: '2026-10-22', source: 't' } };
+    s.securities = { BBB: { dpsOverride: 1, withholdingOverride: 0 } };
+    const f = buildReport(s, '2026-10-22').forecast;
+    expect(f.net).toBeCloseTo(12, 6);
+    expect(f.monthly.every((m) => Math.abs(m.net - 1) < 1e-9)).toBe(true);
+  });
+});

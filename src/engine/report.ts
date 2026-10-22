@@ -89,7 +89,7 @@ export interface Report {
     twByYear: Record<number, number>;
   };
   dividends: DividendSummary & { twYtd: DividendTotals; year: number };
-  forecast: { label: string; rows: ForecastRow[]; gross: number; tax: number; net: number };
+  forecast: { label: string; rows: ForecastRow[]; gross: number; tax: number; net: number; monthly: { month: string; net: number }[] };
   yoc: { contGross?: number; contNet?: number; brokerGross?: number; brokerNet?: number; ttmContNet?: number };
   totalReturn: {
     unrealized: number;
@@ -378,6 +378,24 @@ export function buildReport(store: Store, asOf: string): Report {
   const ratio = (a: number, b: number) => (b > 0 ? a / b : undefined);
   const ttmNet = sum(rows.map((r) => div.ttmBySymbol[r.symbol]?.net ?? 0));
   const fwin = nextTwelveMonths(asOf);
+  // 每月預估：只把每檔的年度預估分配到月份，不另外估金額。
+  // 有 Schwab 預估的照預估的入帳月份；沒有就照過去一年實際入帳的月份；再沒有就平均分到 12 個月
+  const fMonths = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(Date.UTC(Number(fwin.from.slice(0, 4)), Number(fwin.from.slice(5, 7)) - 1 + i, 1));
+    return d.toISOString().slice(0, 7);
+  });
+  const yearAgo = `${yearOf(asOf) - 1}${asOf.slice(4)}`;
+  const monthly = fMonths.map((month) => ({ month, net: 0 }));
+  for (const r of rows) {
+    const f = r.forecast;
+    if (!(f.net > 0)) continue;
+    const w = new Map<string, number>();
+    const add = (date: string, v: number) => v > 0 && w.set(date.slice(5, 7), (w.get(date.slice(5, 7)) ?? 0) + v);
+    if (est && estWindow) for (const e of est.rows) if (e.symbol === r.symbol && inRange(e.date, estWindow.from, estWindow.to)) add(e.date, e.amount);
+    if (!w.size) for (const e of events) if (e.symbol === r.symbol && !e.adjustment && e.date > yearAgo && e.date <= asOf) add(e.date, e.net);
+    const total = sum([...w.values()]);
+    monthly.forEach((m) => (m.net += total > 0 ? (f.net * (w.get(m.month.slice(5, 7)) ?? 0)) / total : f.net / 12));
+  }
   const yoc: Report['yoc'] = {
     contGross: ratio(fGross, totals.contCost),
     contNet: ratio(fNet, totals.contCost),
@@ -476,7 +494,7 @@ export function buildReport(store: Store, asOf: string): Report {
     totals,
     realized,
     dividends: { ...div, twYtd, year },
-    forecast: { label: `${fwin.from.slice(0, 7)} ~ ${fwin.to.slice(0, 7)}`, rows: fRows, gross: fGross, tax: fGross - fNet, net: fNet },
+    forecast: { label: `${fwin.from.slice(0, 7)} ~ ${fwin.to.slice(0, 7)}`, rows: fRows, gross: fGross, tax: fGross - fNet, net: fNet, monthly },
     yoc,
     totalReturn: tr,
     sectors: group((r) => r.sector),
