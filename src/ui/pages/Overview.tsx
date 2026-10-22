@@ -1,11 +1,11 @@
 import type { PageProps } from '../../App';
 import { DividendYearChart, GradientDonut, GrowthChart, ValueChart } from '../charts';
 import { HOLDING_RAMP, SECTOR_RAMP } from '../color';
-import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components';
+import { Gain, Leaders, Notice, Section, TotalsBadge } from '../components';
 import { brokerCostName, schwabHolds } from '../costTerms';
 import { money, pct, tone } from '../format';
 import type { Analytics } from '../../perf/useAnalytics';
-import { StatTiles } from '../StatTiles';
+import { StatTiles, TotalValueHero } from '../StatTiles';
 import { YearTable } from '../YearTable';
 
 export function Overview({ report: r, store, analytics: a }: PageProps & { analytics?: Analytics }) {
@@ -22,10 +22,13 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
     <>
       <Notice title="需要注意" items={r.warnings} />
 
-      <Section no="01" title="累積報酬" aside={priceDates.length ? `價格日 ${priceDates[priceDates.length - 1]}` : undefined}>
-        <div className="split">
-          <Kpi hero label="跨券商累積報酬（已匯入資料的部分）" value={<Gain value={tr.total} />} />
-          <div>
+      <Section no="01" title="總值與報酬" aside={priceDates.length ? `價格日 ${priceDates[priceDates.length - 1]}` : undefined}>
+        {/* 手機：大數字 → 四格 → 明細；桌機：大數字與明細左右並排，四格在下面一排 */}
+        <div className="ov-top">
+          <TotalValueHero r={r} />
+          <StatTiles r={r} a={a} />
+          <div className="ov-detail">
+            <div className="eyebrow">累積報酬明細・已匯入資料的部分</div>
             <Leaders
               rows={[
                 { k: '未實現（延續成本）', v: money(tr.unrealized, { sign: true }), cls: tone(tr.unrealized) },
@@ -39,7 +42,6 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
             />
           </div>
         </div>
-        <StatTiles r={r} a={a} />
       </Section>
 
       <Section no="02" title="成本" aside={`${B}拿來報稅與對帳；延續成本拿來看從第一次買進到現在的報酬；兩者的差異見「移轉紀錄」`}>

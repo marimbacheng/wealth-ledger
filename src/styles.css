@@ -851,12 +851,40 @@ th.sortable:focus-visible {
 }
 
 /* ---------- 總覽數字 ---------- */
+/* 手機：大數字 → 四格 → 明細；桌機：大數字與明細並排，四格在下面一排 */
+.ov-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'hero' 'tiles' 'detail';
+  gap: 28px;
+}
+.ov-hero {
+  grid-area: hero;
+}
+.ov-top > .tiles {
+  grid-area: tiles;
+}
+.ov-detail {
+  grid-area: detail;
+  min-width: 0;
+}
+@media (min-width: 861px) {
+  .ov-top {
+    grid-template-columns: 7fr 5fr;
+    grid-template-areas: 'hero detail' 'tiles tiles';
+    gap: 28px 48px;
+  }
+}
+.hero-delta {
+  font-size: 15px;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
 .tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px 20px;
   align-content: start;
-  margin-top: 28px;
 }
 /* 桌機寬度：四格一排；手機維持 2×2 */
 @media (min-width: 860px) {
@@ -869,7 +897,8 @@ th.sortable:focus-visible {
   border-top: 1px solid var(--rule-strong); /* 頂部粗線引導視線，取代底色卡片 */
   padding-top: 10px;
 }
-.tile-value .unit {
+.tile-value .unit,
+.kpi .value .unit {
   font-size: 0.55em;
   font-weight: 500;
   color: var(--ink-2);

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { Report } from '../engine/report';
 import type { Analytics } from '../perf/useAnalytics';
 import { brokerCostName, schwabHolds } from './costTerms';
-import { money, pct, tone } from './format';
+import { displayRate, money, pct, tone } from './format';
 
 // 總覽右側的四個數字：一格一個主數字，加一個小的輔助圖（走勢、比較、量表）。
 // 主數字用比例數字（不用等寬），文字一律用文字色，顏色只放在標記上。
@@ -83,31 +83,61 @@ function Figure({ text }: { text: string }) {
   );
 }
 
+// 總覽最上面的大數字：目前總值與今日漲跌。盤中每分鐘跟著報價更新，是打開時最先要看的數字
+export function TotalValueHero({ r }: { r: Report }) {
+  const t = r.totals;
+  const cash = t.schwabCash + t.twCash;
+  const [showInfo, setShowInfo] = useState(false);
+  return (
+    <div className="kpi ov-hero">
+      <div className="label tile-label">
+        <span>目前總值・持股＋現金</span>
+        <button className="info-btn" aria-label="計算方式" aria-expanded={showInfo} onClick={() => setShowInfo((x) => !x)}>
+          ⓘ
+        </button>
+      </div>
+      <div className="value hero">
+        <Figure text={money(t.totalValue, { whole: true })} />
+      </div>
+      {t.dayChange != null && (
+        <div className="hero-delta">
+          今日 <span className={tone(t.dayChange)}>{money(t.dayChange, { sign: true })}</span>
+          {t.dayBase ? <span className={tone(t.dayChange)}>（{pct(t.dayChange / t.dayBase, 2, true)}）</span> : null}
+        </div>
+      )}
+      <div className="foot">
+        持股 {money(t.marketValue, { whole: true })}・現金 {money(cash, { whole: true })}
+      </div>
+      {showInfo && (
+        <p className="tile-info">兩家券商的持股市值（依最新報價）加現金，台股依目前匯率換成美元。今日漲跌＝（現價 − 前一日收盤）× 股數，當天買進的從成交價算起。</p>
+      )}
+    </div>
+  );
+}
+
 // 四格同一個結構：一行標題、主數字、一行彩色變化、一行灰色補充，同一列的主數字對齊
 export function StatTiles({ r, a }: { r: Report; a?: Analytics }) {
-  const t = r.totals;
   const tr = r.totalReturn;
   const fullYear = !!tr.since && (Date.parse(r.asOf) - Date.parse(tr.since)) / 864e5 >= 365;
   const beta = a?.beta?.portfolio;
-  const cash = t.schwabCash + t.twCash;
   const div = r.forecast;
   const B = brokerCostName(schwabHolds(r.holdings));
+  // 兩段各自四捨五入會和總數差 1，所以「已實現・股利等」用顯示幣別取整後的總數減未實現
+  const rate = displayRate();
+  const rest = (Math.round(tr.total * rate) - Math.round(tr.unrealized * rate)) / rate;
 
   return (
     <div className="tiles">
       <Tile
-        label="目前總值"
-        value={money(t.totalValue, { whole: true })}
+        label="累積報酬"
+        value={money(tr.total, { sign: true, whole: true })}
         delta={
-          t.dayChange != null && (
-            <>
-              今日 <span className={tone(t.dayChange)}>{money(t.dayChange, { sign: true })}</span>
-              {t.dayBase ? <span className={tone(t.dayChange)}>（{pct(t.dayChange / t.dayBase, 2, true)}）</span> : null}
-            </>
-          )
+          <>
+            未實現 <span className={tone(tr.unrealized)}>{money(tr.unrealized, { sign: true, whole: true })}</span>
+          </>
         }
-        foot={`持股 ${money(t.marketValue, { whole: true })}・現金 ${money(cash, { whole: true })}`}
-        info="兩家券商的持股市值（依最新報價）加現金，台股依目前匯率換成美元。今日漲跌＝（現價 − 前一日收盤）× 股數，當天買進的從成交價算起。"
+        foot={`已實現・股利等 ${money(rest, { sign: true, whole: true })}`}
+        info="跨券商、只算已匯入的資料：未實現（延續成本，從第一次買進算起）＋已實現＋遷移中＋稅後股利＋利息 − 帳外費用。各項金額列在「累積報酬明細」。"
       />
 
       <Tile
