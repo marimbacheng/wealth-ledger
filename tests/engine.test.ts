@@ -291,3 +291,50 @@ describe('XIRR', () => {
     expect(xirr([{ date: '2021-01-01', amount: -1000 }])).toBeUndefined();
   });
 });
+
+describe('資產成長', () => {
+  // Schwab 的餘額匯出只代表 Schwab 帳戶；遷移後 Schwab 歸零，錢在永豐，總資產不該跟著歸零
+  function growthStore(): Store {
+    const s = emptyStore();
+    const vp = (date: string, value: number) => ({ id: `balances|${date}`, date, value, source: 'balances' as const });
+    s.valuePoints = [vp('2026-09-30', 1000), vp('2026-10-19', 1030), vp('2026-10-21', 0)];
+    s.snapshots.push({ id: 'schwab|2026-10-19', broker: 'schwab', date: '2026-10-19', cash: 30, total: 1030, source: 't', rows: [{ symbol: 'AAA', name: 'AAA', qty: 10, price: 100, costBasis: 800, marketValue: 1000 }] });
+    s.prices = { AAA: { price: 105, date: '2026-10-22', source: 't' } };
+    s.txns = [
+      tx({ broker: 'schwab', date: '2026-10-19', type: 'SELL', symbol: 'AAA', qty: 10, price: 100, amount: 1000 }),
+      tx({ broker: 'schwab', date: '2026-10-20', type: 'WITHDRAW', amount: -1030 }),
+      tx({ broker: 'tw', date: '2026-10-20', type: 'TRANSFER_IN', amount: 1030 }),
+      tx({ broker: 'tw', date: '2026-10-21', type: 'BUY', symbol: 'AAA', qty: 10, price: 101, amount: -1010 }),
+    ];
+    return s;
+  }
+
+  it('畫的是兩家券商合計：Schwab 歸零那天，錢在永豐，總值不變', () => {
+    const r = buildReport(growthStore(), '2026-10-22');
+    expect(r.valueSeries.map((p) => [p.date, +p.value.toFixed(2)])).toEqual([
+      ['2026-09-30', 1000],
+      ['2026-10-19', 1030],
+      ['2026-10-20', 1030],
+      ['2026-10-21', 1030],
+      ['2026-10-22', 1070],
+    ]);
+    expect(r.valueSeries.at(-1)!.value).toBeCloseTo(r.totals.totalValue, 6);
+  });
+
+  it('手動補登的總值是全部資產，照原值畫，不再加永豐', () => {
+    const s = growthStore();
+    s.valuePoints.push({ id: 'manual|2026-10-21', date: '2026-10-21', value: 1234, source: 'manual' });
+    const r = buildReport(s, '2026-10-22');
+    expect(r.valueSeries.find((p) => p.date === '2026-10-21')!.value).toBe(1234);
+  });
+
+  it('台幣部位用當天匯率換算；沒有更早的價格時用之後最早的價格（不用成本）', () => {
+    const s = growthStore();
+    s.fx = { current: { rate: 32, date: '2026-10-22', source: 't' }, history: { '2026-10-15': 30 } };
+    s.txns.push(tx({ broker: 'tw', date: '2026-10-15', type: 'OPEN', symbol: '2330', qty: 10, amount: -3000 }));
+    s.prices['2330'] = { price: 1500, date: '2026-10-22', source: 't' };
+    const r = buildReport(s, '2026-10-22');
+    // 10/19：Schwab 1030 ＋ 2330 10 股 × 1500 ÷ 30
+    expect(r.valueSeries.find((p) => p.date === '2026-10-19')!.value).toBeCloseTo(1030 + 15000 / 30, 6);
+  });
+});

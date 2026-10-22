@@ -146,6 +146,30 @@ function frequencyFrom(count: number): number {
   return options.reduce((best, f) => (Math.abs(f - count) < Math.abs(best - count) ? f : best), 4);
 }
 
+// 每檔在某天的價格：當天或之前最近的一筆；更早都沒有就用之後最早的一筆。期初持股的成本不當價格。
+function priceHistory(store: Store): (symbol: string, date: string) => number | undefined {
+  const m = new Map<string, { date: string; price: number }[]>();
+  const add = (sym: string | undefined, date: string, price: number | undefined) => {
+    if (!sym || !price || price <= 0) return;
+    if (!m.has(sym)) m.set(sym, []);
+    m.get(sym)!.push({ date, price });
+  };
+  for (const s of store.snapshots) for (const r of s.rows) add(r.symbol, s.date, r.price);
+  for (const t of store.txns) if (t.type === 'BUY' || t.type === 'SELL') add(t.symbol, t.date, t.price);
+  for (const [sym, q] of Object.entries(store.prices)) add(sym, q.date, q.price);
+  for (const xs of m.values()) xs.sort((a, b) => a.date.localeCompare(b.date));
+  return (sym, date) => {
+    const xs = m.get(sym);
+    if (!xs?.length) return undefined;
+    let best: number | undefined;
+    for (const x of xs) {
+      if (x.date > date) break;
+      best = x.price;
+    }
+    return best ?? xs[0].price;
+  };
+}
+
 export function buildReport(store: Store, asOf: string): Report {
   const led = computeLedgers(store, asOf);
   const warnings = [...led.warnings];
@@ -385,16 +409,35 @@ export function buildReport(store: Store, asOf: string): Report {
   };
 
   // ---------- 資產成長 ----------
+  // 畫兩家券商合計。匯入的資料點（持倉、餘額、對帳單）只代表 Schwab 帳戶，手動補登的是全部資產。
+  // 永豐那一側每天用帳本推算（現金＋持股 × 當時最近的價格）；錨點之後 Schwab 沒有資料點的日子也用帳本推算。
   const prio: Record<string, number> = { manual: 4, balances: 3, statement: 2, snapshot: 1 };
   const byDate = new Map<string, (typeof store.valuePoints)[number]>();
   for (const p of store.valuePoints) {
     const cur = byDate.get(p.date);
     if (!cur || prio[p.source] > prio[cur.source]) byDate.set(p.date, p);
   }
-  const valueSeries = [...byDate.values()]
-    .filter((p) => p.date <= asOf)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((p) => ({ date: p.date, value: p.value, source: p.source, contribution: opening ? contribAt(p.date) : undefined }));
+  const priceAt = priceHistory(store);
+  const brokerValues = (date: string) => {
+    const l = computeLedgers(store, date);
+    const r = rateAt(store, date);
+    const kd = (c: Currency) => (c === 'USD' ? 1 : r ? 1 / r : 0);
+    const held = (pools: Record<string, { qty: number }>) =>
+      sum(Object.entries(pools).map(([sym, p]) => (p.qty > 1e-6 ? p.qty * (priceAt(sym, date) ?? 0) * kd(currencyOf(sym, store.securities)) : 0)));
+    return { schwab: l.schwabCash + held(l.schwab), tw: l.twCash + l.twCashTWD * kd('TWD') + held(l.tw) };
+  };
+  const dates = new Set([...byDate.keys()].filter((d) => d < asOf));
+  for (const t of store.txns) if (t.date >= anchorDate && t.date < asOf) dates.add(t.date);
+  const valueSeries: Report['valueSeries'] = [...dates].sort().flatMap((date) => {
+    const p = byDate.get(date);
+    const contribution = opening ? contribAt(date) : undefined;
+    if (p?.source === 'manual') return [{ date, value: p.value, source: p.source, contribution }];
+    if (!p && (!led.anchor || date < anchorDate)) return [];
+    const v = brokerValues(date);
+    return [{ date, value: (p ? p.value : v.schwab) + v.tw, source: p ? p.source : 'ledger', contribution }];
+  });
+  const today = byDate.get(asOf);
+  if (valueSeries.length || led.anchor || store.txns.length) valueSeries.push({ date: asOf, value: today?.source === 'manual' ? today.value : totalValue, source: today?.source === 'manual' ? 'manual' : 'ledger', contribution: opening ? contribAt(asOf) : undefined });
 
   // ---------- 資料涵蓋範圍 ----------
   const KIND: Record<string, string> = { transactions: '交易紀錄', income: '股利（投資收益）', realized: '已實現損益' };
