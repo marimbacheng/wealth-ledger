@@ -24,8 +24,8 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
 
       <Section no="01" title="累積報酬" aside={priceDates.length ? `價格日 ${priceDates[priceDates.length - 1]}` : undefined}>
         <div className="split">
+          <Kpi hero label="跨券商累積報酬（已匯入資料的部分）" value={<Gain value={tr.total} />} />
           <div>
-            <Kpi hero label="跨券商累積報酬（已匯入資料的部分）" value={<Gain value={tr.total} />} />
             <Leaders
               rows={[
                 { k: '未實現（延續成本）', v: money(tr.unrealized, { sign: true }), cls: tone(tr.unrealized) },
@@ -38,8 +38,8 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
               ]}
             />
           </div>
-          <StatTiles r={r} a={a} />
         </div>
+        <StatTiles r={r} a={a} />
       </Section>
 
       <Section no="02" title="成本" aside={`${B}拿來報稅與對帳；延續成本拿來看從第一次買進到現在的報酬；兩者的差異見「移轉紀錄」`}>

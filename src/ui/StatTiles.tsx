@@ -18,7 +18,7 @@ function Tile(props: { label: ReactNode; value: ReactNode; delta?: ReactNode; fo
           ⓘ
         </button>
       </div>
-      <div className="tile-value">{props.value}</div>
+      <div className="tile-value">{typeof props.value === 'string' ? <Figure text={props.value} /> : props.value}</div>
       <div className="tile-delta">{props.delta ?? '\u00a0'}</div>
       {props.foot && <div className="tile-foot">{props.foot}</div>}
       {showInfo && <p className="tile-info">{props.info}</p>}
@@ -49,21 +49,37 @@ function MonthBars({ data }: { data: { month: string; net: number }[] }) {
   );
 }
 
-// Beta 量表：0 到 2，標出大盤（1.0）的位置
+// Beta 指針：中性的灰色軌道、標出大盤 1 的刻度，指針標出組合的位置。
+// 不用填滿的長條：長條越滿看起來越好，但 Beta 越大只代表波動越大
 function BetaMeter({ beta }: { beta: number }) {
   const at = (v: number) => `${(Math.max(0, Math.min(2, v)) / 2) * 100}%`;
   return (
     <div className="meter" role="img" aria-label={`Beta ${beta.toFixed(2)}，大盤為 1`}>
       <div className="meter-track">
-        <div className="meter-fill" style={{ width: at(beta) }} />
         <div className="meter-mark" style={{ left: at(1) }} />
+        <div className="meter-pointer" style={{ left: at(beta) }} />
       </div>
       <div className="meter-scale">
-        <span>0</span>
+        <span>穩定</span>
         <span style={{ left: at(1) }}>大盤 1</span>
-        <span>2</span>
+        <span>波動大</span>
       </div>
     </div>
+  );
+}
+
+// 主數字的貨幣符號與單位用小一號、淡一點的字，數字本身更突出（$49,256、NT$1,600,123、16.1%）
+function Figure({ text }: { text: string }) {
+  const m = text.match(/^([+\-−]?)([^\d]*?)(\d[\d.,]*)(\D*)$/);
+  if (!m) return <>{text}</>;
+  const [, sign, pre, num, suf] = m;
+  return (
+    <>
+      {sign}
+      {pre && <span className="unit">{pre}</span>}
+      {num}
+      {suf && <span className="unit">{suf}</span>}
+    </>
   );
 }
 
