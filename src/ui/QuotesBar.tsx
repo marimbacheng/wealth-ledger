@@ -35,7 +35,7 @@ export function QuotesCard({ quotes }: { quotes: QuotesApi }) {
       <div className="row">
         <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <input type="checkbox" checked={quotes.auto} onChange={(e) => quotes.setAuto(e.target.checked)} />
-          開啟網站時自動更新（超過 30 分鐘才重抓；只記在這台裝置）
+          自動更新：開啟網站時（超過 30 分鐘才重抓）、開盤時間每分鐘一次（只記在這台裝置）
         </label>
         <QuotesButton quotes={quotes} />
       </div>

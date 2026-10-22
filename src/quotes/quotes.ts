@@ -6,6 +6,7 @@ export interface Quote {
   date: string;
   source: string;
   time?: string;
+  prevClose?: number;
 }
 export interface QuoteResult {
   quotes: Record<string, Quote>;
@@ -21,7 +22,8 @@ export function validQuotes(body: unknown): QuoteResult | null {
   const quotes: Record<string, Quote> = {};
   for (const [sym, q] of Object.entries(b.quotes)) {
     if (q && typeof q.price === 'number' && Number.isFinite(q.price) && q.price > 0 && DATE_RE.test(String(q.date)) && typeof q.source === 'string') {
-      quotes[sym] = { price: q.price, date: q.date, source: q.source, ...(typeof q.time === 'string' ? { time: q.time } : {}) };
+      const prev = typeof q.prevClose === 'number' && q.prevClose > 0 ? { prevClose: q.prevClose } : {};
+      quotes[sym] = { price: q.price, date: q.date, source: q.source, ...(typeof q.time === 'string' ? { time: q.time } : {}), ...prev };
     }
   }
   const errors: Record<string, string> = {};
@@ -54,9 +56,17 @@ export function applyQuotes(prices: Store['prices'], quotes: Record<string, Quot
   for (const [sym, q] of Object.entries(quotes)) {
     const cur = next[sym];
     if (cur && (cur.date > q.date || (cur.date === q.date && cur.source === '手動'))) continue;
-    if (cur && cur.date === q.date && cur.price === q.price && cur.source === q.source) continue;
-    next[sym] = { price: q.price, date: q.date, source: q.source };
+    if (cur && cur.date === q.date && cur.price === q.price && cur.source === q.source && cur.prevClose === q.prevClose) continue;
+    next[sym] = { price: q.price, date: q.date, source: q.source, ...(q.prevClose ? { prevClose: q.prevClose } : {}) };
     updated.push(sym);
   }
   return { prices: next, updated };
+}
+
+// 盤中每分鐘的報價只放在這台裝置（不進同步檔），以免每分鐘都加密上傳一次。
+// 寫進帳本（會同步）的時機：手動更新、出現新的交易日、或距離上次寫入超過 30 分鐘
+export const PERSIST_MS = 30 * 60 * 1000;
+export function shouldPersist(prices: Store['prices'], quotes: Record<string, Quote>, lastPersistedAt: number, now: number, manual: boolean): boolean {
+  if (manual || now - lastPersistedAt >= PERSIST_MS) return true;
+  return Object.entries(quotes).some(([sym, q]) => !prices[sym] || q.date > prices[sym].date);
 }

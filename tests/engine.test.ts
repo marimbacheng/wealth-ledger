@@ -362,3 +362,33 @@ describe('年化報酬率', () => {
     expect(r.valueSeries[0]).toMatchObject({ date: '2024-05-14', value: 1000, contribution: 1000 });
   });
 });
+
+describe('今日漲跌', () => {
+  function dayStore(): Store {
+    const s = emptyStore();
+    s.snapshots.push({ id: 'schwab|2026-10-19', broker: 'schwab', date: '2026-10-19', cash: 0, total: 0, source: 't', rows: [{ symbol: 'AAA', name: 'AAA', qty: 10, price: 100, costBasis: 800, marketValue: 1000 }] });
+    s.prices = { AAA: { price: 105, date: '2026-10-22', source: 'Yahoo', prevClose: 100 } };
+    return s;
+  }
+
+  it('(現價 − 前一日收盤) × 股數；合計與幅度', () => {
+    const r = buildReport(dayStore(), '2026-10-22');
+    expect(r.holdings[0].day).toMatchObject({ change: 50, base: 1000, native: 5, date: '2026-10-22' });
+    expect(r.totals.dayChange).toBeCloseTo(50, 6);
+    expect(r.totals.dayBase).toBeCloseTo(1000, 6);
+  });
+
+  it('價格日當天買進的股數，從成交價算起', () => {
+    const s = dayStore();
+    s.txns.push(tx({ broker: 'schwab', date: '2026-10-22', type: 'BUY', symbol: 'AAA', qty: 4, price: 103, amount: -412 }));
+    const d = buildReport(s, '2026-10-22').holdings[0].day!;
+    expect(d.change).toBeCloseTo(10 * 5 + 4 * (105 - 103), 6);
+    expect(d.base).toBeCloseTo(10 * 100 + 4 * 103, 6);
+  });
+
+  it('手動輸入的價格沒有前一日收盤：不顯示今日漲跌', () => {
+    const s = dayStore();
+    s.prices.AAA = { price: 105, date: '2026-10-22', source: '手動' };
+    expect(buildReport(s, '2026-10-22').holdings[0].day).toBeUndefined();
+  });
+});

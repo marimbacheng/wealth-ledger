@@ -111,6 +111,7 @@ export interface PriceQuote {
   price: number;
   date: string;
   source: string;
+  prevClose?: number; // 前一個交易日收盤（自動報價才有），算今日漲跌用
 }
 
 // 跨市場對應：Schwab 賣出 from、在永豐買回 to；1 股 from = ratio 股 to（例：1 股 TSM ADR = 5 股 2330）

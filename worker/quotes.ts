@@ -8,7 +8,8 @@ export interface Quote {
   price: number;
   date: string; // 價格所屬的交易日（交易所當地日期）
   source: string;
-  time?: string; // Yahoo：最近成交時間（ISO）
+  time?: string; // 最近成交時間（ISO）
+  prevClose?: number; // 前一個交易日收盤，算今日漲跌用
 }
 
 export interface QuotesResponse {
@@ -26,7 +27,8 @@ const misUrl = (codes: string[]) =>
   `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${codes.flatMap((c) => [`tse_${c}.tw`, `otc_${c}.tw`]).join('|')}&json=1&delay=0`;
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL';
 const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes';
-const yahooUrl = (sym: string) => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=5d&interval=1d`;
+// range=1d：meta.chartPreviousClose 就是前一個交易日收盤
+const yahooUrl = (sym: string) => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`;
 
 // 民國日期 1151021 → 2026-10-21
 export function rocDate(s: unknown): string | undefined {
@@ -34,20 +36,28 @@ export function rocDate(s: unknown): string | undefined {
   return m ? `${Number(m[1]) + 1911}-${m[2]}-${m[3]}` : undefined;
 }
 
+const signed = (v: unknown) => {
+  const t = String(v ?? '').replace(/,/g, '').trim();
+  const n = t ? Number(t) : NaN;
+  return Number.isFinite(n) ? n : undefined;
+};
 const num = (v: unknown) => {
-  const n = Number(String(v ?? '').replace(/,/g, '').trim());
-  return Number.isFinite(n) && n > 0 ? n : undefined;
+  const n = signed(v);
+  return n != null && n > 0 ? n : undefined;
 };
 
 // 證交所與櫃買中心的每日收盤：欄位名稱不同，其餘相同
-export function parseTwClose(rows: unknown, codes: Set<string>, fields: { code: string; close: string }, source: string, out: QuotesResponse) {
+// 漲跌欄有正負號（下跌為負），前一日收盤 = 收盤 − 漲跌
+export function parseTwClose(rows: unknown, codes: Set<string>, fields: { code: string; close: string; change: string }, source: string, out: QuotesResponse) {
   if (!Array.isArray(rows)) return;
   for (const r of rows as Record<string, unknown>[]) {
     const code = String(r?.[fields.code] ?? '').trim();
     if (!codes.has(code) || out.quotes[code]) continue;
     const price = num(r[fields.close]);
     const date = rocDate(r.Date);
-    if (price && date) out.quotes[code] = { price, date, source };
+    const change = signed(r[fields.change]);
+    const prevClose = price && change != null && price - change > 0 ? Math.round((price - change) * 1e4) / 1e4 : undefined;
+    if (price && date) out.quotes[code] = { price, date, source, ...(prevClose ? { prevClose } : {}) };
     else out.errors[code] = `${source}當日沒有成交價`;
   }
 }
@@ -63,7 +73,8 @@ export function parseMis(json: unknown, codes: Set<string>, out: QuotesResponse)
     if (!codes.has(code) || !price || !m || out.quotes[code]) continue;
     const date = `${m[1]}-${m[2]}-${m[3]}`;
     const time = /^\d{2}:\d{2}:\d{2}$/.test(String(r.t)) ? `${date}T${r.t}+08:00` : undefined;
-    out.quotes[code] = { price, date, source: '證交所即時', ...(time ? { time: new Date(time).toISOString() } : {}) };
+    const prevClose = num(r.y);
+    out.quotes[code] = { price, date, source: '證交所即時', ...(time ? { time: new Date(time).toISOString() } : {}), ...(prevClose ? { prevClose } : {}) };
   }
 }
 
@@ -80,7 +91,8 @@ export function parseYahoo(json: unknown): Quote | undefined {
   const t = Number(meta?.regularMarketTime);
   if (!price || !Number.isFinite(t) || t <= 0) return undefined;
   const tz = typeof meta?.exchangeTimezoneName === 'string' ? meta.exchangeTimezoneName : 'America/New_York';
-  return { price, date: localDate(t, tz), source: 'Yahoo', time: new Date(t * 1000).toISOString() };
+  const prevClose = num(meta?.chartPreviousClose);
+  return { price, date: localDate(t, tz), source: 'Yahoo', time: new Date(t * 1000).toISOString(), ...(prevClose ? { prevClose } : {}) };
 }
 
 const list = (v: string | null) =>
@@ -108,7 +120,7 @@ export async function getQuotes(us: string[], tw: string[], fetchFn: FetchFn, in
     const codes = new Set(twOk.filter((c) => !out.quotes[c]));
     if (!codes.size) return;
     try {
-      parseTwClose(await getJson(fetchFn, TWSE_URL, init), codes, { code: 'Code', close: 'ClosingPrice' }, '證交所', out);
+      parseTwClose(await getJson(fetchFn, TWSE_URL, init), codes, { code: 'Code', close: 'ClosingPrice', change: 'Change' }, '證交所', out);
     } catch (e) {
       for (const c of codes) out.errors[c] = `證交所無法連線（${(e as Error).message}）`;
     }
@@ -116,7 +128,7 @@ export async function getQuotes(us: string[], tw: string[], fetchFn: FetchFn, in
     const rest = new Set(twOk.filter((c) => !out.quotes[c]));
     if (!rest.size) return;
     try {
-      parseTwClose(await getJson(fetchFn, TPEX_URL, init), rest, { code: 'SecuritiesCompanyCode', close: 'Close' }, '櫃買中心', out);
+      parseTwClose(await getJson(fetchFn, TPEX_URL, init), rest, { code: 'SecuritiesCompanyCode', close: 'Close', change: 'Change' }, '櫃買中心', out);
       for (const c of rest) if (out.quotes[c]) delete out.errors[c];
       for (const c of rest) if (!out.quotes[c] && !out.errors[c]) out.errors[c] = '證交所與櫃買中心都查不到這個代號';
     } catch (e) {

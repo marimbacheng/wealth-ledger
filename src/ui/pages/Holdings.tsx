@@ -7,7 +7,7 @@ import { holdingsCsv, holdingsMarkdown } from '../exportHoldings';
 import type { QuotesApi } from '../../quotes/useQuotes';
 import type { Analytics } from '../../perf/useAnalytics';
 import { QuotesButton, quotesStatus } from '../QuotesBar';
-import { money, moneyIn, pct, qty, today } from '../format';
+import { money, moneyIn, pct, qty, today, tone } from '../format';
 
 type View = 'all' | 'broker' | 'cont';
 type Dir = 'asc' | 'desc';
@@ -117,6 +117,14 @@ export function Holdings({ report: r, quotes, analytics }: PageProps & { quotes?
     { key: 'qty', label: '股數', sortValue: (h) => h.qty, cell: (h) => qty(Number(h.qty.toFixed(4))) },
     { key: 'price', label: '現價', hint: '最近一次匯入或輸入的價格（原幣）；滑過價格看日期', sortValue: (h) => (h.price ?? -Infinity) / (h.currency === 'TWD' ? (r.fx?.rate ?? 1) : 1), cell: (h) => (h.price != null ? moneyIn(h.price, h.currency) : '—') },
     { key: 'marketValue', label: '市值', sortValue: (h) => h.marketValue, cell: (h) => money(h.marketValue), foot: money(t.marketValue) },
+    {
+      key: 'dayChange',
+      label: '今日漲跌',
+      hint: '最近一個交易日的漲跌金額與幅度：(現價 − 前一日收盤) × 股數；當天買進的股數從成交價算起。開盤時間每分鐘更新；滑過現價可看價格日',
+      sortValue: (h) => h.day?.change ?? -Infinity,
+      cell: (h) => (h.day ? <Gain value={h.day.change} base={h.day.base} /> : '—'),
+      foot: t.dayChange != null ? <Gain value={t.dayChange} base={t.dayBase ?? 0} /> : '',
+    },
     { key: 'weight', label: '比重', sortValue: (h) => h.weight, cell: (h) => pct(h.weight, 1), foot: '100%' },
     {
       key: 'beta',
@@ -145,6 +153,15 @@ export function Holdings({ report: r, quotes, analytics }: PageProps & { quotes?
       foot: <Gain value={t.brokerGain} base={t.brokerCost} />,
     },
     {
+      key: 'brokerDay',
+      label: `今日漲跌％（${B}）`,
+      hint: `今日漲跌金額 ÷ ${B}：今天讓這檔以${B}計算的報酬率變動了幾個百分點`,
+      group: 'broker',
+      sortValue: (h) => (h.day && h.brokerCost > 0 ? h.day.change / h.brokerCost : -Infinity),
+      cell: (h) => (h.day && h.brokerCost > 0 ? <span className={tone(h.day.change)}>{pct(h.day.change / h.brokerCost, 2, true)}</span> : '—'),
+      foot: t.dayChange != null && t.brokerCost > 0 ? <span className={tone(t.dayChange)}>{pct(t.dayChange / t.brokerCost, 2, true)}</span> : '',
+    },
+    {
       key: 'brokerYoc',
       label: `成本殖利率（${B}・稅後）`,
       hint: `未來 12 個月預估稅後股息 ÷ ${B}`,
@@ -164,6 +181,15 @@ export function Holdings({ report: r, quotes, analytics }: PageProps & { quotes?
       sortValue: (h) => h.contGain,
       cell: (h) => <Gain value={h.contGain} base={h.contCost} />,
       foot: <Gain value={t.contGain} base={t.contCost} />,
+    },
+    {
+      key: 'contDay',
+      label: '今日漲跌％（延續成本）',
+      hint: '今日漲跌金額 ÷ 延續成本：今天讓這檔以延續成本計算的報酬率變動了幾個百分點',
+      group: 'cont',
+      sortValue: (h) => (h.day && h.contCost > 0 ? h.day.change / h.contCost : -Infinity),
+      cell: (h) => (h.day && h.contCost > 0 ? <span className={tone(h.day.change)}>{pct(h.day.change / h.contCost, 2, true)}</span> : '—'),
+      foot: t.dayChange != null && t.contCost > 0 ? <span className={tone(t.dayChange)}>{pct(t.dayChange / t.contCost, 2, true)}</span> : '',
     },
     {
       key: 'contYoc',

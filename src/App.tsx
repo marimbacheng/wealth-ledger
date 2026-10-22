@@ -6,7 +6,8 @@ import { mergeBatch } from './store/merge';
 import { loadStore, saveStore } from './store/persist';
 import { setDisplay, today } from './ui/format';
 import { useFx } from './fx/useFx';
-import { useQuotes } from './quotes/useQuotes';
+import { readLive, useQuotes } from './quotes/useQuotes';
+import { applyQuotes, type Quote } from './quotes/quotes';
 import { useAnalytics } from './perf/useAnalytics';
 import { Dividends } from './ui/pages/Dividends';
 import { Holdings } from './ui/pages/Holdings';
@@ -82,13 +83,16 @@ export default function App() {
     else delete el.dataset.theme;
   }, [theme]);
 
-  const report = useMemo(() => buildReport(store, asOf), [store, asOf]);
+  // 盤中報價只放在這台裝置，蓋在帳本的價格上算報表（規則同自動報價：同一天不蓋掉手動價格）
+  const [live, setLive] = useState<Record<string, Quote>>(readLive);
+  const effective = useMemo(() => (Object.keys(live).length ? { ...store, prices: applyQuotes(store.prices, live).prices } : store), [store, live]);
+  const report = useMemo(() => buildReport(effective, asOf), [effective, asOf]);
   const sync = useSync(store, setStore);
   setDisplay(dispCur, report.fx?.rate);
   const update = useCallback((fn: (s: Store) => Store) => setStore((s) => fn(structuredClone(s))), []);
   const fx = useFx(store, update);
-  const quotes = useQuotes(store, report.holdings, update);
-  const analytics = useAnalytics(store, report);
+  const quotes = useQuotes(store, report.holdings, update, setLive);
+  const analytics = useAnalytics(effective, report);
 
   // 匯入要同步回傳結果，所以從 ref 取目前資料、算完再一次 setStore（不能放在 updater 裡，StrictMode 會跑兩次）
   const storeRef = useRef(store);

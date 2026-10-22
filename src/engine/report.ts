@@ -53,6 +53,8 @@ export interface HoldingRow {
   forecast: ForecastRow;
   currency: Currency;
   native: { marketValue: number; contCost: number; brokerCost: number; schwabCost: number; twCost: number };
+  // 最近一個交易日的漲跌（報價有前一日收盤才有）；當天買進的股數從成交價算起
+  day?: { change: number; base: number; native: number; date: string };
 }
 
 export interface Report {
@@ -75,6 +77,8 @@ export interface Report {
     twCashTWD: number; // 原幣別
     pendingProceeds: number;
     totalValue: number;
+    dayChange?: number; // 有今日漲跌的持股合計（美元）
+    dayBase?: number; // 上面那些持股前一日的市值（含當天買進的成本）
   };
   realized: {
     continuous: number;
@@ -260,6 +264,18 @@ export function buildReport(store: Store, asOf: string): Report {
     }
     const gross = dps * qty * kk;
 
+    // 今日漲跌：(現價 − 前一日收盤) × 原有股數 ＋ (現價 − 成交價) × 價格日當天買進的股數
+    let day: HoldingRow['day'];
+    if (price != null && quote?.prevClose) {
+      const buys = store.txns.filter((t) => t.symbol === symbol && t.type === 'BUY' && t.date === quote.date && t.qty && t.price);
+      const qBuy = Math.min(qty, sum(buys.map((t) => t.qty!)));
+      const qOld = qty - qBuy;
+      const buyCost = qBuy > 0 ? (sum(buys.map((t) => t.qty! * t.price!)) * qBuy) / sum(buys.map((t) => t.qty!)) : 0;
+      const changeN = qOld * (price - quote.prevClose) + (qBuy * price - buyCost);
+      const baseN = qOld * quote.prevClose + buyCost;
+      day = { change: changeN * kk, base: baseN * kk, native: price - quote.prevClose, date: quote.date };
+    }
+
     rows.push({
       symbol,
       name: meta.name ?? symbol,
@@ -284,6 +300,7 @@ export function buildReport(store: Store, asOf: string): Report {
       forecast: { symbol, qty, currency: cur, dps, dpsSource, rate, rateSource, gross, tax: gross * rate, net: gross * (1 - rate) },
       currency: cur,
       native: { marketValue: mvN, contCost: contCostN, brokerCost: brokerCostN, schwabCost: sp?.cost ?? 0, twCost: tp?.cost ?? 0 },
+      ...(day ? { day } : {}),
     });
   }
   const mvTotal = sum(rows.map((r) => r.marketValue));
@@ -316,6 +333,7 @@ export function buildReport(store: Store, asOf: string): Report {
     twCashTWD: led.twCashTWD,
     pendingProceeds,
     totalValue,
+    ...(rows.some((r) => r.day) ? { dayChange: sum(rows.map((r) => r.day?.change ?? 0)), dayBase: sum(rows.map((r) => r.day?.base ?? 0)) } : {}),
   };
 
   // ---------- 已實現 ----------

@@ -6,9 +6,9 @@ interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
-// 上游回應在 Cloudflare 邊緣快取：即時行情 30 秒、報價 10 分鐘、歷史價格 12 小時
+// 上游回應在 Cloudflare 邊緣快取：證交所即時行情 30 秒、Yahoo 報價 60 秒、每日收盤 10 分鐘、歷史價格 12 小時
 const cached = (ttl: number) => (url: string, init?: RequestInit) => fetch(url, { ...init, cf: { cacheTtl: ttl, cacheEverything: true } } as RequestInit);
-const quoteFetch = (url: string, init?: RequestInit) => cached(url.includes('mis.twse.com.tw') ? 30 : 600)(url, init);
+const quoteFetch = (url: string, init?: RequestInit) => cached(url.includes('mis.twse.com.tw') ? 30 : url.includes('finance.yahoo.com') ? 60 : 600)(url, init);
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
