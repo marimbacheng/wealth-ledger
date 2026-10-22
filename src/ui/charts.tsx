@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis } from 'recharts';
+import { benchValues } from '../engine/performance';
 import { ramp, type RampSpec } from './color';
 import { compactMoney, monthTicks, money, niceAxis, pct, yearTicks } from './format';
 
-// 折線、長條只用驗證過的兩個分類色（series-1 石油藍、series-2 赭黃），其餘是文字與細線色。
+// 分類色只用驗證過的三色（series-1 石油藍＝我的組合、series-2 赭黃＝S&P 500、series-3 莓紅＝NASDAQ），其餘是文字與細線色。
 const C = {
   s1: 'var(--series-1)',
   s2: 'var(--series-2)',
+  s3: 'var(--series-3)', // 第三色（NASDAQ），和前兩色一起驗證過
   tax: 'var(--tax)', // 預扣稅：淺灰，代表「被扣走的部分」
   grid: 'var(--rule)',
   axis: 'var(--rule)',
@@ -245,70 +247,112 @@ function sample<T extends { contribution?: number }>(xs: T[], max = 320): T[] {
 
 const ymd = (t: number) => new Date(t).toISOString().slice(0, 10);
 
+type GrowthRow = { date: string; value: number; contribution?: number; flow?: number; spx?: number; ndx?: number };
+type Cmp = 'contribution' | 'spx' | 'ndx';
+const CMP: { id: Cmp; label: string; color: string; dash?: string }[] = [
+  { id: 'contribution', label: '累計投入', color: C.muted, dash: '4 3' },
+  { id: 'spx', label: 'S&P 500（含息）', color: C.s2 },
+  { id: 'ndx', label: 'NASDAQ（含息）', color: C.s3 },
+];
+
 function GrowthTip({ active, payload }: TipProps) {
   if (!active || !payload?.length) return null;
-  const row = (payload[0].payload ?? {}) as { date?: string; value?: number; contribution?: number };
-  const gain = row.value != null && row.contribution != null ? row.value - row.contribution : undefined;
+  const row = (payload[0].payload ?? {}) as GrowthRow & { cSpx?: number; cNdx?: number; contribution?: number; show?: Cmp[] };
+  const show = row.show ?? [];
+  const diff = (v?: number) => (v != null ? `（你 ${money(row.value - v, { sign: true, whole: true })}）` : '');
   return (
     <div className="chart-tip">
       <div className="t">{row.date}</div>
       <div>帳戶總值：{money(row.value)}</div>
-      {row.contribution != null && <div>累計投入：{money(row.contribution)}</div>}
-      {gain != null && <div>投資損益：{money(gain, { sign: true })}</div>}
+      {show.includes('contribution') && row.contribution != null && (
+        <div>
+          累計投入：{money(row.contribution)}，投資損益 {money(row.value - row.contribution, { sign: true })}
+        </div>
+      )}
+      {show.includes('spx') && row.cSpx != null && (
+        <div>
+          改買 S&amp;P 500：{money(row.cSpx)}
+          {diff(row.cSpx)}
+        </div>
+      )}
+      {show.includes('ndx') && row.cNdx != null && (
+        <div>
+          改買 NASDAQ：{money(row.cNdx)}
+          {diff(row.cNdx)}
+        </div>
+      )}
     </div>
   );
 }
 
-export function GrowthChart({ data, events = [] }: { data: { date: string; value: number; contribution?: number }[]; events?: { date: string; label: string }[] }) {
+export function GrowthChart({ data }: { data: GrowthRow[] }) {
   const [range, setRange] = useState<Range>('all');
+  const [show, setShow] = useState<Cmp[]>(['contribution', 'spx']);
+  const toggle = (c: Cmp) => setShow((xs) => (xs.includes(c) ? xs.filter((x) => x !== c) : [...xs, c]));
   const last = data[data.length - 1]?.date ?? '';
   const from = rangeStart(range, last);
-  const shown = useMemo(() => sample(data.filter((d) => d.date >= from)).map((d) => ({ ...d, t: Date.parse(`${d.date}T00:00:00Z`) })), [data, from]);
+  const shown = useMemo(() => {
+    const rows = data.filter((d) => d.date >= from);
+    // 區間內重新起算：第一天的投入＝當天總值
+    const c0 = rows[0]?.contribution ?? 0;
+    const v0 = rows[0]?.value ?? 0;
+    const spx = benchValues(rows, 'spx');
+    const ndx = benchValues(rows, 'ndx');
+    const full = rows.map((r, i) => ({ ...r, contribution: r.contribution != null ? r.contribution - c0 + v0 : undefined, cSpx: spx[i], cNdx: ndx[i], show, t: Date.parse(`${r.date}T00:00:00Z`) }));
+    return sample(full);
+  }, [data, from, show]);
   const first = shown[0];
   const end = shown[shown.length - 1];
   if (!first || !end) return null;
   const min = first.t;
   const max = end.t;
-  const values = shown.flatMap((d) => [d.value, ...(d.contribution != null ? [d.contribution] : [])]);
+  const values = shown.flatMap((d) => [d.value, show.includes('contribution') ? d.contribution : undefined, show.includes('spx') ? d.cSpx : undefined, show.includes('ndx') ? d.cNdx : undefined].filter((v): v is number => v != null));
   const y = niceAxis(Math.min(...values), Math.max(...values));
-  const hasContrib = shown.some((d) => d.contribution != null);
-  const invested = hasContrib ? (end.contribution ?? 0) - (first.contribution ?? 0) : 0;
+  const invested = (end.contribution ?? 0) - (first.contribution ?? 0);
   const gain = end.value - first.value - invested;
-  const ticks = max - min > 400 * 864e5 ? yearTicks(min, max) : monthTicks(min, max);
-  const fmtTick = (t: number) => (max - min > 400 * 864e5 ? String(new Date(t).getUTCFullYear()) : `${new Date(t).getUTCMonth() + 1}月`);
+  const long = max - min > 400 * 864e5;
+  const ticks = long ? yearTicks(min, max) : monthTicks(min, max);
+  const fmtTick = (t: number) => (long ? String(new Date(t).getUTCFullYear()) : `${new Date(t).getUTCMonth() + 1}月`);
+  const vs = (v?: number) => (v != null ? end.value - v : undefined);
   return (
     <>
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8, gap: 12 }}>
-        <div className="seg" role="tablist">
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+        <div className="seg" role="tablist" aria-label="期間">
           {RANGES.map((r) => (
             <button key={r.id} role="tab" aria-selected={range === r.id} className={range === r.id ? 'on' : ''} onClick={() => setRange(r.id)}>
               {r.label}
             </button>
           ))}
         </div>
-        <div className="growth-stats">
-          <span>
-            {first.date} {money(first.value, { whole: true })} → {money(end.value, { whole: true })}
-          </span>
-          {hasContrib && <span>期間投入 {money(invested, { sign: true, whole: true })}</span>}
-          <span className={gain >= 0 ? 'up' : 'down'}>投資損益 {money(gain, { sign: true, whole: true })}</span>
+        <div className="chips" role="group" aria-label="比較">
+          {CMP.map((c) => (
+            <button key={c.id} className={`chip ${show.includes(c.id) ? 'on' : ''}`} aria-pressed={show.includes(c.id)} onClick={() => toggle(c.id)}>
+              <i style={{ background: c.color }} />
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="legend">
+      <div className="growth-stats">
         <span>
-          <i style={{ background: C.s1 }} />
-          帳戶總值
+          {first.date} {money(first.value, { whole: true })} → {money(end.value, { whole: true })}
         </span>
-        {hasContrib && (
+        <span>期間投入 {money(invested, { sign: true, whole: true })}</span>
+        <span className={gain >= 0 ? 'up' : 'down'}>投資損益 {money(gain, { sign: true, whole: true })}</span>
+        {show.includes('spx') && vs(end.cSpx) != null && (
           <span>
-            <i style={{ background: C.s2 }} />
-            累計投入
+            比改買 S&amp;P 500 <b className={vs(end.cSpx)! >= 0 ? 'up' : 'down'}>{money(vs(end.cSpx), { sign: true, whole: true })}</b>
+          </span>
+        )}
+        {show.includes('ndx') && vs(end.cNdx) != null && (
+          <span>
+            比改買 NASDAQ <b className={vs(end.cNdx)! >= 0 ? 'up' : 'down'}>{money(vs(end.cNdx), { sign: true, whole: true })}</b>
           </span>
         )}
       </div>
-      <div style={{ width: '100%', height: 260 }}>
+      <div style={{ width: '100%', height: 260, marginTop: 6 }}>
         <ResponsiveContainer>
-          <ComposedChart data={shown} margin={{ top: 14, right: 16, bottom: 0, left: 0 }}>
+          <ComposedChart data={shown} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="growthFill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={C.s1} stopOpacity={0.22} />
@@ -319,23 +363,17 @@ export function GrowthChart({ data, events = [] }: { data: { date: string; value
             <XAxis dataKey="t" type="number" scale="time" domain={[min, max]} ticks={ticks} tickFormatter={fmtTick} tick={tick} stroke={C.axis} />
             <YAxis tick={tick} tickFormatter={compact} stroke={C.axis} width={52} domain={y.domain} ticks={y.ticks} />
             <Tooltip content={<GrowthTip />} cursor={{ stroke: C.muted }} />
-            {events
-              .filter((e) => e.date >= first.date && e.date <= end.date)
-              .map((e) => (
-                <ReferenceLine
-                  key={e.date}
-                  x={Date.parse(`${e.date}T00:00:00Z`)}
-                  stroke={C.muted}
-                  strokeDasharray="3 3"
-                  // 靠近右邊的標記，文字放在線的左邊，免得被切掉
-                  label={{ value: e.label, position: (Date.parse(`${e.date}T00:00:00Z`) - min) / (max - min || 1) > 0.75 ? 'insideTopRight' : 'insideTopLeft', fill: C.muted, fontSize: 10 }}
-                />
-              ))}
             <Area type="monotone" dataKey="value" name="帳戶總值" stroke={C.s1} strokeWidth={2} fill="url(#growthFill)" isAnimationActive={false} />
-            {hasContrib && <Line type="stepAfter" dataKey="contribution" name="累計投入" stroke={C.s2} strokeWidth={1.5} dot={false} isAnimationActive={false} />}
+            {show.includes('contribution') && <Line type="stepAfter" dataKey="contribution" name="累計投入" stroke={C.muted} strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
+            {show.includes('spx') && <Line type="monotone" dataKey="cSpx" name="S&P 500" stroke={C.s2} strokeWidth={1.5} dot={false} isAnimationActive={false} />}
+            {show.includes('ndx') && <Line type="monotone" dataKey="cNdx" name="NASDAQ" stroke={C.s3} strokeWidth={1.5} dot={false} isAnimationActive={false} />}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      <p className="desc" style={{ marginTop: 6 }}>
+        <i className="legend-dot" style={{ background: C.s1 }} />
+        帳戶總值。比較線：同一段期間、同樣的入金時間與金額，若改買 S&amp;P 500 或 NASDAQ 的總報酬指數（含股息再投入）會是多少。
+      </p>
     </>
   );
 }
@@ -362,11 +400,11 @@ export function YearReturnChart({ data }: { data: { date: string; p?: number; sp
         </span>
         <span>
           <i style={{ background: C.s2 }} />
-          S&amp;P 500
+          S&amp;P 500（含息）
         </span>
         <span>
-          <i style={{ background: C.muted }} />
-          NASDAQ（虛線）
+          <i style={{ background: C.s3 }} />
+          NASDAQ（含息）
         </span>
       </div>
       <div style={{ width: '100%', height: 220 }}>
@@ -393,7 +431,7 @@ export function YearReturnChart({ data }: { data: { date: string; p?: number; sp
             />
             <Line type="monotone" dataKey="p" name="我的組合" stroke={C.s1} strokeWidth={2} dot={false} isAnimationActive={false} />
             <Line type="monotone" dataKey="spx" name="S&P 500" stroke={C.s2} strokeWidth={1.5} dot={false} isAnimationActive={false} />
-            <Line type="monotone" dataKey="ndx" name="NASDAQ" stroke={C.muted} strokeWidth={1.5} strokeDasharray="4 3" dot={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="ndx" name="NASDAQ" stroke={C.s3} strokeWidth={1.5} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>

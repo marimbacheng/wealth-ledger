@@ -5,6 +5,7 @@ import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components'
 import { brokerCostName, schwabHolds } from '../costTerms';
 import { money, pct, tone } from '../format';
 import type { Analytics } from '../../perf/useAnalytics';
+import { StatTiles } from '../StatTiles';
 import { YearTable } from '../YearTable';
 
 export function Overview({ report: r, store, analytics: a }: PageProps & { analytics?: Analytics }) {
@@ -16,7 +17,6 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
   const B = brokerCostName(holds);
   const lastYear = r.dividends.byYear[r.dividends.byYear.length - 1];
   const priceDates = [...new Set(r.holdings.map((h) => h.priceDate).filter(Boolean))].sort();
-  const fullYear = !!tr.since && (Date.parse(r.asOf) - Date.parse(tr.since)) / 864e5 >= 365;
 
   return (
     <>
@@ -38,36 +38,7 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
               ]}
             />
           </div>
-          <div className="stack">
-            <Kpi label="目前總值" value={money(t.totalValue)} foot={`持股 ${money(t.marketValue)}　現金 ${money(t.schwabCash + t.twCash)}`} />
-            {tr.since && tr.netContribution != null ? (
-              <>
-                <Kpi
-                  label={`年化報酬率・${tr.since} 起`}
-                  value={fullYear ? pct(tr.xirr) : '—'}
-                  foot={fullYear ? '資金加權（考慮每筆投入的時間點），已扣股利預扣稅' : '起算未滿一年，年化沒有意義；先看下方的期間賺得'}
-                />
-                <Leaders
-                  rows={[
-                    { k: '起算日總值＋之後投入', v: money(tr.netContribution) },
-                    { k: '期間賺得（現值 − 投入）', v: money(tr.gainByContribution, { sign: true }), cls: tone(tr.gainByContribution) },
-                  ]}
-                />
-              </>
-            ) : (
-              <p className="muted" style={{ fontSize: 12, margin: 0 }}>
-                到「匯入與設定」填入報酬起算點（日期與當天的帳戶總值，例如 Schwab 績效報表的 Beginning Value），這裡會顯示年化報酬率。
-              </p>
-            )}
-            {a?.beta?.portfolio != null && (
-              <Kpi
-                label="Beta・相對 S&P 500"
-                value={a.beta.portfolio.toFixed(2)}
-                foot={`近 5 年月報酬；有美股 ADR 的台股用 ADR（2330 用 TSM）；現金以 0 計${a.beta.missing.length ? `；${a.beta.missing.join('、')} 資料不足未計入` : ''}`}
-              />
-            )}
-            <Kpi label={`未來 12 個月預估股息・稅後（${r.forecast.label}）`} value={money(r.forecast.net)} foot={`稅前 ${money(r.forecast.gross)}，預扣 ${money(r.forecast.tax)}`} />
-          </div>
+          <StatTiles r={r} a={a} />
         </div>
       </Section>
 
@@ -148,7 +119,7 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
 
       <Section no="05" title="資產成長" aside={a?.perf ? `用每日收盤價與交易紀錄重建，${a.from} 起（交易紀錄最早的日期）` : a?.busy ? '正在取得歷史價格…' : undefined}>
         {a?.perf?.chart.length ? (
-          <GrowthChart data={a.perf.chart} events={a.perf.events} />
+          <GrowthChart data={a.perf.chart} />
         ) : r.valueSeries.length > 0 ? (
           <ValueChart data={r.valueSeries} />
         ) : (

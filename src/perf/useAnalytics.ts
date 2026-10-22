@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Store } from '../domain/types';
 import type { Report } from '../engine/report';
-import { betaSource, checks, dailyValues, dataStart, events, monthlyBeta, NDX, SPX, twrIndex, USDTWD, yearlyRows, type History, type PriceSeries } from '../engine/performance';
+import { benchXirr, betaSource, checks, dailyValues, dataStart, monthlyBeta, NDX, NDX_TR, SPX, SPX_TR, twrIndex, USDTWD, yearlyRows, type History, type PriceSeries } from '../engine/performance';
 import { xirr } from '../engine/xirr';
 import { pickAnchor } from '../engine/ledger';
 
@@ -102,7 +102,7 @@ export function useAnalytics(store: Store, report: Report) {
     if (!from) return [];
     const s = new Set<string>(anchor?.rows.map((r) => r.symbol) ?? []);
     for (const t of store.txns) if (t.symbol && t.date >= from && (t.type === 'BUY' || t.type === 'SELL' || t.type === 'OPEN')) s.add(t.symbol);
-    return [...s, SPX, NDX, USDTWD];
+    return [...s, SPX, NDX, SPX_TR, NDX_TR, USDTWD];
   }, [store.txns, anchor, from]);
   const daily = useHistory(dailySymbols, '1d', from ? addDays(from, -10) : undefined);
 
@@ -117,11 +117,24 @@ export function useAnalytics(store: Store, report: Report) {
     // 最後一點用報表的目前總值（含今天的報價）
     if (points.length) points[points.length - 1] = { ...points[points.length - 1], value: report.totals.totalValue };
     const idx = twrIndex(points);
-    // 累計投入：起點當天的總值當作已投入，之後加上每筆入金（期初持股以市值計）
+    // 累計投入：起點當天的總值當作已投入，之後加上每筆入金（期初持股以市值計）。
+    // 同時帶上當天的含息指數，圖上才能算「同樣的投入改買 S&P 500／NASDAQ」
+    const spxTr = hist[SPX_TR] ?? hist[SPX];
+    const ndxTr = hist[NDX_TR] ?? hist[NDX];
+    const level = (s: PriceSeries | undefined) => {
+      let i = 0;
+      return (d: string) => {
+        if (!s) return undefined;
+        while (i + 1 < s.d.length && s.d[i + 1] <= d) i++;
+        return s.d[i] <= d ? s.c[i] : undefined;
+      };
+    };
+    const spxAt = level(spxTr);
+    const ndxAt = level(ndxTr);
     let contribution = points[0]?.value ?? 0;
     const chart = points.map((p, i) => {
       if (i > 0) contribution += p.flow;
-      return { date: p.date, value: p.value, contribution };
+      return { date: p.date, value: p.value, contribution, flow: i > 0 ? p.flow : 0, spx: spxAt(p.date), ndx: ndxAt(p.date) };
     });
     // 建議的報酬起算點：資料起點與當天重建的總值；用它算的年化報酬率供參考
     const start = points[0];
@@ -132,8 +145,8 @@ export function useAnalytics(store: Store, report: Report) {
       years: yearlyRows(idx, hist, from, to),
       checks: checks(store, points),
       chart,
-      events: events(store),
-      index: { portfolio: idx, spx: series(SPX), ndx: series(NDX) },
+      index: { portfolio: idx, spx: series(hist[SPX_TR] ? SPX_TR : SPX), ndx: series(hist[NDX_TR] ? NDX_TR : NDX) },
+      bench: benchXirr(chart, report.totalReturn.since, store.settings.openingContribution?.amount, to, report.totals.totalValue),
       suggest: start ? { date: start.date, value: start.value, xirr: suggestXirr } : undefined,
     };
   }, [daily.series, store, from, to, report.totals.totalValue]);

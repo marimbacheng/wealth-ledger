@@ -81,11 +81,11 @@ export function YearTable({ a }: { a: Analytics }) {
                     <Cells s={r.portfolio} />
                   </tr>
                   <tr>
-                    <td className="l muted">S&amp;P 500</td>
+                    <td className="l muted">S&amp;P 500（含息）</td>
                     <Cells s={r.spx} />
                   </tr>
                   <tr>
-                    <td className="l muted">NASDAQ</td>
+                    <td className="l muted">NASDAQ（含息）</td>
                     <Cells s={r.ndx} />
                   </tr>
                 </Fragment>
@@ -95,7 +95,7 @@ export function YearTable({ a }: { a: Analytics }) {
         </table>
       </div>
       <p className="desc" style={{ marginTop: 8 }}>
-        我的組合是時間加權報酬：用每日收盤價和交易紀錄重建每天的帳戶總值，扣掉入金的影響，股利預扣稅已扣除。S&amp;P 500、NASDAQ 是價格指數，不含股息。年內最大漲幅＝從低點到之後高點的最大漲幅，最大跌幅＝從高點到之後低點的最大跌幅。
+        我的組合是時間加權報酬：用每日收盤價和交易紀錄重建每天的帳戶總值，扣掉入金的影響，股利預扣稅已扣除。S&amp;P 500、NASDAQ 用含股息再投入的總報酬指數（S&amp;P 500 Total Return、NASDAQ Composite Total Return），和組合一樣含股利。年內最大漲幅＝從低點到之後高點的最大漲幅，最大跌幅＝從高點到之後低點的最大跌幅。
         {checks.length > 0 && ` 重建的每日總值和 Schwab 的 ${checks.length} 筆對帳資料比對，最大差 ${pct(worst, 2)}（Schwab 的期末值含應計股息、盤中匯出的時間不同）。`}
       </p>
       {checks.length > 0 && (

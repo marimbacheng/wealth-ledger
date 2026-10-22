@@ -2,6 +2,7 @@ import { currencyOf, rateAt, txnCurrency } from '../domain/currency';
 import type { Store, Txn } from '../domain/types';
 import { CASH_SOURCES, computeLedgers, migrationSells, pickAnchor } from './ledger';
 import { externalFlows } from './report';
+import { xirr } from './xirr';
 
 // 每日帳戶總值、年度表現與 Beta。
 // 持股與現金用交易紀錄從錨點快照往回推（之前）或往後推（之後），價格用歷史收盤（還原分割），
@@ -15,8 +16,11 @@ export interface PriceSeries {
 }
 export type History = Record<string, PriceSeries>;
 
-export const SPX = '^GSPC';
+export const SPX = '^GSPC'; // 價格指數：交易日曆與 Beta 用
 export const NDX = '^IXIC';
+// 含息的總報酬指數：和組合（含股利）比較時用，才公平
+export const SPX_TR = '^SP500TR';
+export const NDX_TR = '^XCMP';
 export const USDTWD = 'TWD=X';
 
 // ---------- 價格 ----------
@@ -244,8 +248,8 @@ export interface YearRow {
 // 每個日曆年一列；起算日所在的年份從起算日開始，今年算到資料日
 export function yearlyRows(portfolio: { date: string; idx: number }[], hist: History, from: string, to: string): YearRow[] {
   const idx = (s?: PriceSeries) => (s ? s.d.map((d, i) => ({ date: d, idx: s.c[i] })) : []);
-  const spx = idx(hist[SPX]);
-  const ndx = idx(hist[NDX]);
+  const spx = idx(hist[SPX_TR] ?? hist[SPX]);
+  const ndx = idx(hist[NDX_TR] ?? hist[NDX]);
   const rows: YearRow[] = [];
   for (let y = Number(from.slice(0, 4)); y <= Number(to.slice(0, 4)); y++) {
     const start = y === Number(from.slice(0, 4)) ? from : `${y - 1}-12-31`;
@@ -324,12 +328,42 @@ export function dataStart(store: Store): string | undefined {
   return start;
 }
 
-// 圖上標記的事件：券商轉換（TD Ameritrade → Schwab）、遷移到永豐（第一筆遷移賣出）
-export function events(store: Store): { date: string; label: string }[] {
-  const out: { date: string; label: string }[] = [];
-  const tda = store.txns.filter((t) => t.broker === 'schwab' && /券商轉換/.test(t.note ?? '')).map((t) => t.date).sort()[0];
-  if (tda) out.push({ date: tda, label: 'TD Ameritrade → Schwab' });
-  const mig = migrationSells(store).map((t) => t.date).sort()[0];
-  if (mig) out.push({ date: mig, label: 'Schwab → 永豐' });
-  return out;
+// ---------- 和指數比較 ----------
+
+export interface BenchRow {
+  date: string;
+  value: number;
+  flow?: number;
+  spx?: number;
+  ndx?: number;
+}
+
+// 同樣的金流改買指數：第一天的帳戶總值與之後每筆投入，都換成當天的指數單位
+export function benchValues(rows: BenchRow[], k: 'spx' | 'ndx'): (number | undefined)[] {
+  const p0 = rows[0]?.[k];
+  if (!p0) return rows.map(() => undefined);
+  let units = rows[0].value / p0;
+  return rows.map((r, i) => {
+    const p = r[k];
+    if (!p) return undefined;
+    if (i > 0 && r.flow) units += r.flow / p;
+    return units * p;
+  });
+}
+
+// 指數版的年化報酬率：起算日總值與之後每筆投入都改買指數，用同樣的金流算 XIRR
+export function benchXirr(rows: BenchRow[], since: string | undefined, amount: number | undefined, to: string, ours: number) {
+  if (!since || amount == null || !rows.length) return undefined;
+  const after = rows.filter((r) => r.date > since);
+  const startRow = [...rows].reverse().find((r) => r.date <= since) ?? rows[0];
+  const one = (k: 'spx' | 'ndx') => {
+    const p0 = startRow[k];
+    const pEnd = rows[rows.length - 1][k];
+    if (!p0 || !pEnd) return undefined;
+    let units = amount / p0;
+    for (const r of after) if (r.flow && r[k]) units += r.flow / r[k]!;
+    const flows = [{ date: since, amount: -amount }, ...after.filter((r) => r.flow).map((r) => ({ date: r.date, amount: -r.flow! })), { date: to, amount: units * pEnd }];
+    return xirr(flows);
+  };
+  return { spx: one('spx'), ndx: one('ndx'), ours };
 }

@@ -13,6 +13,7 @@
   --ochre-soft: #f3e3cc;
   --series-1: #006c9d;
   --series-2: #c37829;
+  --series-3: #b8336a; /* NASDAQ；與前兩色一起過 dataviz 驗證（色盲 ΔE 9.3、一般 19.2） */
   --red: #b5362a;
   --green: #2e6f4e;
   --tax: #bdb7aa;
@@ -37,6 +38,7 @@
     --ochre-soft: #3a2a17;
     --series-1: #0995b2;
     --series-2: #c87f2c;
+    --series-3: #c9457c;
     --red: #e36f5c;
     --green: #5fb98a;
     --tax: #b3aea3;
@@ -57,6 +59,7 @@
   --ochre-soft: #3a2a17;
   --series-1: #0995b2;
   --series-2: #c87f2c;
+  --series-3: #c9457c;
   --red: #e36f5c;
   --green: #5fb98a;
   --tax: #b3aea3;
@@ -148,10 +151,38 @@ a {
 }
 .masthead .controls {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+/* 頁首偏好：文字在選單上方，手機上三欄平分寬度，不會超出畫面 */
+.prefs {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
   gap: 8px;
-  align-items: center;
-  font-size: 12px;
-  color: var(--ink-2);
+}
+.pref {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .masthead .controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .prefs {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pref select {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 .sync-badge {
@@ -242,11 +273,11 @@ a {
 .grid {
   display: grid;
   gap: 28px 40px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   margin-bottom: 8px;
 }
 .grid.two {
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
 }
 .split {
   display: grid;
@@ -780,4 +811,154 @@ th.sortable:focus-visible {
   font-size: 12.5px;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--muted);
+}
+.chip i {
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+  opacity: 0.35;
+}
+.chip.on {
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+.chip.on i {
+  opacity: 1;
+}
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+/* ---------- 總覽數字 ---------- */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+  align-content: start;
+}
+.tile {
+  border-top: 1px solid var(--rule-strong);
+  padding-top: 10px;
+  min-width: 0;
+}
+.tile-label {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.tile-value {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 6px 0 4px;
+  color: var(--ink);
+}
+.tile-delta {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.tile-foot {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.45;
+}
+.spark {
+  display: block;
+  margin-top: 6px;
+  max-width: 100%;
+}
+.compare {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.compare-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 0 6px;
+  align-items: center;
+}
+.compare-delta {
+  grid-column: 2 / -1;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.compare-row i {
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+}
+.compare-row .num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.meter {
+  margin-top: 8px;
+}
+.meter-track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--series-1) 18%, transparent);
+}
+.meter-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--series-1);
+}
+.meter-mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  background: var(--ink-2);
+}
+.meter-scale {
+  position: relative;
+  height: 14px;
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.meter-scale span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.meter-scale span:first-child {
+  left: 0;
+  transform: none;
+}
+.meter-scale span:last-child {
+  right: 0;
+  transform: none;
+}
+@media (max-width: 380px) {
+  .tiles {
+    grid-template-columns: 1fr;
+  }
 }

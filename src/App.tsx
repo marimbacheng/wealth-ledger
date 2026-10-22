@@ -143,49 +143,51 @@ export default function App() {
         </div>
         <div className="controls">
           <SyncBadge sync={sync} onClick={() => setTab('setup')} />
-          <label className="controls" title={report.fx ? `1 美元 = ${report.fx.rate} 台幣（${report.fx.date ?? ''}）` : '尚未取得匯率'}>
-            幣別
-            <select
-              value={dispCur}
-              onChange={(e) => {
-                const v = e.target.value === 'TWD' ? 'TWD' : 'USD';
-                setDispCur(v);
-                writePref('displayCurrency', v);
-              }}
-            >
-              <option value="USD">美元</option>
-              <option value="TWD" disabled={!report.fx}>
-                台幣
-              </option>
-            </select>
-          </label>
-          <label className="controls">
-            外觀
-            <select
-              value={theme}
-              onChange={(e) => {
-                setTheme(e.target.value);
-                writePref('theme', e.target.value);
-              }}
-            >
-              <option value="auto">跟隨系統</option>
-              <option value="light">淺色</option>
-              <option value="dark">深色</option>
-            </select>
-          </label>
-          <label className="controls">
-            漲跌色
-            <select
-              value={updown}
-              onChange={(e) => {
-                setUpdown(e.target.value);
-                writePref('updown-v2', e.target.value);
-              }}
-            >
-              <option value="us">綠漲紅跌</option>
-              <option value="tw">紅漲綠跌</option>
-            </select>
-          </label>
+          <div className="prefs">
+            <label className="pref" title={report.fx ? `1 美元 = ${report.fx.rate} 台幣（${report.fx.date ?? ''}）` : '尚未取得匯率'}>
+              <span>幣別</span>
+              <select
+                value={dispCur}
+                onChange={(e) => {
+                  const v = e.target.value === 'TWD' ? 'TWD' : 'USD';
+                  setDispCur(v);
+                  writePref('displayCurrency', v);
+                }}
+              >
+                <option value="USD">美元</option>
+                <option value="TWD" disabled={!report.fx}>
+                  台幣
+                </option>
+              </select>
+            </label>
+            <label className="pref">
+              <span>外觀</span>
+              <select
+                value={theme}
+                onChange={(e) => {
+                  setTheme(e.target.value);
+                  writePref('theme', e.target.value);
+                }}
+              >
+                <option value="auto">跟隨系統</option>
+                <option value="light">淺色</option>
+                <option value="dark">深色</option>
+              </select>
+            </label>
+            <label className="pref">
+              <span>漲跌色</span>
+              <select
+                value={updown}
+                onChange={(e) => {
+                  setUpdown(e.target.value);
+                  writePref('updown-v2', e.target.value);
+                }}
+              >
+                <option value="us">綠漲紅跌</option>
+                <option value="tw">紅漲綠跌</option>
+              </select>
+            </label>
+          </div>
         </div>
       </header>
       {saveFailed && <div className="notice">瀏覽器無法儲存資料（可能是私密瀏覽模式）。關閉分頁前請先到「匯入與設定」下載備份。</div>}

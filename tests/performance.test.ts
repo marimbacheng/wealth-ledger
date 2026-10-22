@@ -1,5 +1,5 @@
 import { emptyStore, type Store, type Txn } from '../src/domain/types';
-import { betaSource, checks, dailyValues, dataStart, events, monthlyBeta, periodStats, SPX, twrIndex, unadjusted, yearlyRows, type History, type PriceSeries } from '../src/engine/performance';
+import { benchValues, benchXirr, betaSource, checks, dailyValues, dataStart, monthlyBeta, periodStats, SPX, twrIndex, unadjusted, yearlyRows, type History, type PriceSeries } from '../src/engine/performance';
 import { handleHistory, parseChart } from '../worker/history';
 
 let seq = 0;
@@ -137,7 +137,7 @@ describe('Beta', () => {
   });
 });
 
-describe('資料起點、分拆、事件', () => {
+describe('資料起點、分拆', () => {
   function base(): Store {
     const s = emptyStore();
     s.snapshots.push({ id: 'schwab|2026-10-19', broker: 'schwab', date: '2026-10-19', cash: 0, total: 0, source: 't', rows: [{ symbol: 'MMM', name: 'MMM', qty: 8, price: 130, costBasis: 0, marketValue: 0 }] });
@@ -170,15 +170,23 @@ describe('資料起點、分拆、事件', () => {
     expect(v['2024-04-01']).toBeCloseTo(8 * 100 + 2 * 70, 6);
   });
 
-  it('圖上的事件：券商轉換、遷移到永豐', () => {
-    const s = base();
-    s.txns = [
-      tx({ broker: 'schwab', date: '2024-05-13', type: 'OTHER', symbol: 'MMM', qty: 8, amount: 0, note: '券商轉換：證券轉入（TD Ameritrade → Schwab）' }),
-      tx({ broker: 'schwab', date: '2026-10-19', type: 'SELL', symbol: 'MMM', qty: 8, amount: 1040 }),
-    ];
-    expect(events(s)).toEqual([
-      { date: '2024-05-13', label: 'TD Ameritrade → Schwab' },
-      { date: '2026-10-19', label: 'Schwab → 永豐' },
-    ]);
+});
+
+describe('和指數比較', () => {
+  // 第一天 1000 元、指數 100；第二天指數 110；第三天入金 550（指數 110）；第四天指數 121
+  const rows = [
+    { date: '2024-01-01', value: 1000, spx: 100 },
+    { date: '2025-01-01', value: 1150, spx: 110 },
+    { date: '2025-01-02', value: 1700, flow: 550, spx: 110 },
+    { date: '2026-01-01', value: 1900, spx: 121 },
+  ];
+  it('同樣的金流改買指數：起點總值與每筆入金都換成當天的指數單位', () => {
+    expect(benchValues(rows, 'spx')).toEqual([1000, 1100, 1650, (10 + 5) * 121]);
+    expect(benchValues(rows, 'ndx')).toEqual([undefined, undefined, undefined, undefined]);
+  });
+  it('指數版的年化報酬率：指數每年 +10%，不管何時投入都是 10%', () => {
+    const b = benchXirr(rows, '2024-01-01', 1000, '2026-01-01', 0.12)!;
+    expect(b.spx!).toBeCloseTo(0.1, 2);
+    expect(b.ndx).toBeUndefined();
   });
 });
