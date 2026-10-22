@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import type { PageProps } from '../../App';
 import type { HoldingRow } from '../../engine/report';
 import { Card, Gain, Notice, Seg } from '../components';
-import { brokerCostName, costGapNote, costHint, costTerms, schwabHolds } from '../costTerms';
+import { brokerCostName, costHint, costTerms, schwabHolds } from '../costTerms';
 import { holdingsCsv, holdingsMarkdown } from '../exportHoldings';
 import { money, moneyIn, pct, qty, today } from '../format';
 
@@ -193,21 +193,7 @@ export function Holdings({ report: r }: PageProps) {
   }
 
   return (
-    <Card
-      title="持股明細"
-      desc="現價、均價用原幣別；其餘金額依頁首選的幣別顯示（台股依匯率換算）。點欄位名稱可排序，滑過欄位名稱看說明。"
-    >
-      <dl className="defs">
-        {costTerms(holds).map((c) => (
-          <Fragment key={c.name}>
-            <dt>{c.name}</dt>
-            <dd>{c.what}</dd>
-            <dd className="use">用途：{c.use}</dd>
-          </Fragment>
-        ))}
-        <dt>兩者差在哪</dt>
-        <dd className="wide">{costGapNote(holds)}</dd>
-      </dl>
+    <Card title="持股明細">
       <div className="row" style={{ marginBottom: 10, justifyContent: 'space-between' }}>
         <Seg
           value={view}
@@ -305,6 +291,18 @@ export function Holdings({ report: r }: PageProps) {
           </tfoot>
         </table>
       </div>
+      <details className="defs-fold">
+        <summary>名詞說明：{costTerms(holds).map((c) => c.name).join('、')}</summary>
+        <dl className="defs">
+          {costTerms(holds).map((c) => (
+            <Fragment key={c.name}>
+              <dt>{c.name}</dt>
+              <dd>{c.what}</dd>
+              <dd className="use">用途：{c.use}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      </details>
       <p className="desc" style={{ marginTop: 8 }}>
         匯出檔只在這台裝置產生，不會上傳。
       </p>

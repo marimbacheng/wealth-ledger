@@ -727,14 +727,14 @@ th.sortable:focus-visible {
     margin-bottom: 8px;
   }
 }
-.defs dd.wide {
-  grid-column: 2 / -1;
-  color: var(--muted);
+.defs-fold {
+  margin-top: 16px;
 }
-@media (max-width: 640px) {
-  .defs dd.wide {
-    grid-column: auto;
-  }
+.defs-fold > summary {
+  padding: 6px 0;
+}
+.defs-fold[open] > summary {
+  margin-bottom: 8px;
 }
 
 /* ---------- 欄位調整 ---------- */
