@@ -315,7 +315,6 @@ export function Holdings({ report: r, quotes, analytics }: PageProps & { quotes?
                 return (
                   <th
                     key={c.key}
-                    id={`col-${c.key}`}
                     className={`sortable ${c.text ? 'l' : ''} ${on ? 'on' : ''}`}
                     aria-sort={on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                     onClick={() => toggle(c)}

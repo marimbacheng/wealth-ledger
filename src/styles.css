@@ -858,8 +858,6 @@ th.sortable:focus-visible {
   align-content: start;
 }
 .tile {
-  border-top: 1px solid var(--rule-strong);
-  padding-top: 10px;
   min-width: 0;
 }
 .tile-label {
@@ -931,19 +929,7 @@ th.sortable:focus-visible {
   }
 }
 
-/* 小卡：整格可點、ⓘ 展開說明、每月股息長條 */
-.tile.link {
-  cursor: pointer;
-  border-radius: 4px;
-  margin: -4px -6px 0;
-  padding: 10px 6px 4px;
-  transition: background 0.15s;
-}
-.tile.link:hover,
-.tile.link:focus-visible {
-  background: var(--soft);
-  outline: none;
-}
+/* 小卡：ⓘ 展開說明、每月股息長條 */
 .tile-label {
   display: flex;
   align-items: center;
@@ -960,11 +946,6 @@ th.sortable:focus-visible {
 }
 .info-btn[aria-expanded='true'] {
   color: var(--ink);
-}
-.tile-go {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: 14px;
 }
 .tile-info {
   margin: 8px 0 0;
@@ -1007,19 +988,4 @@ th.sortable:focus-visible {
 }
 .mbars-axis span:last-child {
   text-align: right;
-}
-.flash {
-  animation: flash 1.6s ease-out;
-}
-@keyframes flash {
-  0% {
-    background: color-mix(in oklab, var(--series-1) 22%, transparent);
-  }
-  100% {
-    background: transparent;
-  }
-}
-.section,
-.card {
-  scroll-margin-top: 12px;
 }

@@ -5,10 +5,10 @@ import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components'
 import { brokerCostName, schwabHolds } from '../costTerms';
 import { money, pct, tone } from '../format';
 import type { Analytics } from '../../perf/useAnalytics';
-import { StatTiles, type Go } from '../StatTiles';
+import { StatTiles } from '../StatTiles';
 import { YearTable } from '../YearTable';
 
-export function Overview({ report: r, store, analytics: a, go }: PageProps & { analytics?: Analytics; go?: Go }) {
+export function Overview({ report: r, store, analytics: a }: PageProps & { analytics?: Analytics }) {
   const t = r.totals;
   const tr = r.totalReturn;
   const hasTw = t.twCost > 0 || r.dividends.twYtd.count > 0;
@@ -38,7 +38,7 @@ export function Overview({ report: r, store, analytics: a, go }: PageProps & { a
               ]}
             />
           </div>
-          <StatTiles r={r} a={a} go={go} />
+          <StatTiles r={r} a={a} />
         </div>
       </Section>
 
@@ -117,7 +117,7 @@ export function Overview({ report: r, store, analytics: a, go }: PageProps & { a
         </div>
       </Section>
 
-      <Section id="growth" no="05" title="資產成長" aside={a?.perf ? `用每日收盤價與交易紀錄重建，${a.from} 起（交易紀錄最早的日期）` : a?.busy ? '正在取得歷史價格…' : undefined}>
+      <Section no="05" title="資產成長" aside={a?.perf ? `用每日收盤價與交易紀錄重建，${a.from} 起（交易紀錄最早的日期）` : a?.busy ? '正在取得歷史價格…' : undefined}>
         {a?.perf?.chart.length ? (
           <GrowthChart data={a.perf.chart} />
         ) : r.valueSeries.length > 0 ? (
@@ -127,7 +127,7 @@ export function Overview({ report: r, store, analytics: a, go }: PageProps & { a
         )}
       </Section>
 
-      <Section id="yearly" no="06" title="年度表現" aside="和 S&P 500、NASDAQ 同期比較">
+      <Section no="06" title="年度表現" aside="和 S&P 500、NASDAQ 同期比較">
         {a ? <YearTable a={a} /> : null}
       </Section>
 

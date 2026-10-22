@@ -82,7 +82,7 @@ export function Dividends({ report: r, store }: PageProps) {
       </div>
 
       <div className="section">
-        <Card id="forecast" title="預估未來 12 個月股息" desc="年化每股股利（稅前）× 目前股數；預扣稅率優先用實際紀錄觀察到的稅率。可在「匯入與設定 → 個股設定」手動覆寫。">
+        <Card title="預估未來 12 個月股息" desc="年化每股股利（稅前）× 目前股數；預扣稅率優先用實際紀錄觀察到的稅率。可在「匯入與設定 → 個股設定」手動覆寫。">
           <div className="table-wrap">
             <table>
               <thead>
