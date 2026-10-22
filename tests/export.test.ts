@@ -1,6 +1,6 @@
 import { emptyStore } from '../src/domain/types';
 import { buildReport } from '../src/engine/report';
-import { EXPORT_FIELDS, holdingsCsv, holdingsMarkdown } from '../src/ui/exportHoldings';
+import { EXPORT_FIELDS, exportFields, holdingsCsv, holdingsMarkdown } from '../src/ui/exportHoldings';
 
 function report() {
   const s = emptyStore();
@@ -44,4 +44,18 @@ describe('持股明細匯出', () => {
     const tableRows = md.split('\n').filter((l) => l.startsWith('| ') && !l.startsWith('| ---'));
     expect(tableRows).toHaveLength(1 + 2);
   });
+
+  it('Schwab 已沒有持股：只留永豐成本與延續成本，不列 Schwab 成本', () => {
+    const r = report();
+    const rows = r.holdings.map((h) => ({ ...h, schwabQty: 0, twQty: h.qty }));
+    const header = holdingsCsv(rows).replace(/^\uFEFF/, '').split('\n')[0];
+    expect(header).not.toContain('Schwab成本');
+    expect(header).not.toContain('券商成本');
+    expect(header).toContain('永豐成本(USD)');
+    expect(header.split(',')).toHaveLength(exportFields(false).length);
+    const md = holdingsMarkdown({ ...r, holdings: rows }, rows);
+    expect(md).toContain('- 永豐成本 650 USD');
+    expect(md).toContain('延續成本 − 永豐成本 = −（移轉時 Schwab 賣出所得 − 原始成本）');
+  });
 });
+

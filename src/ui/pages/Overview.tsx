@@ -2,6 +2,7 @@ import type { PageProps } from '../../App';
 import { DividendYearChart, GradientDonut, ValueChart } from '../charts';
 import { HOLDING_RAMP, SECTOR_RAMP } from '../color';
 import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components';
+import { brokerCostName, costGapNote, schwabHolds } from '../costTerms';
 import { money, pct, tone } from '../format';
 
 export function Overview({ report: r, store }: PageProps) {
@@ -9,7 +10,8 @@ export function Overview({ report: r, store }: PageProps) {
   const tr = r.totalReturn;
   const hasTw = t.twCost > 0 || r.dividends.twYtd.count > 0;
   const schwabCost = t.brokerCost - t.twCost;
-  const hasSchwab = t.schwabValue > 0;
+  const holds = schwabHolds(r.holdings);
+  const B = brokerCostName(holds);
   const lastYear = r.dividends.byYear[r.dividends.byYear.length - 1];
   const priceDates = [...new Set(r.holdings.map((h) => h.priceDate).filter(Boolean))].sort();
   const costGap = t.contCost - t.brokerCost;
@@ -55,15 +57,19 @@ export function Overview({ report: r, store }: PageProps) {
         </div>
       </Section>
 
-      <Section no="02" title="成本" aside="券商成本拿來報稅與對帳；延續成本拿來看從第一次買進到現在的報酬">
+      <Section no="02" title="成本" aside={`${B}拿來報稅與對帳；延續成本拿來看從第一次買進到現在的報酬`}>
         <div className="grid">
           <div>
-            <div className="eyebrow">券商成本・兩家券商帳上</div>
+            <div className="eyebrow">{holds ? '券商成本・兩家券商帳上' : '永豐成本・永豐帳上'}</div>
             <Leaders
               rows={[
-                { k: 'Schwab 成本', v: hasSchwab ? money(schwabCost) : '已全數轉出' },
-                { k: '永豐成本', v: hasTw ? money(t.twCost) : '尚未買進' },
-                { k: '券商成本', v: money(t.brokerCost), total: true },
+                ...(holds
+                  ? [
+                      { k: 'Schwab 成本', v: money(schwabCost) },
+                      { k: '永豐成本', v: hasTw ? money(t.twCost) : '尚未買進' },
+                    ]
+                  : []),
+                { k: B, v: money(t.brokerCost), total: true },
                 { k: '帳面盈虧', v: <Gain value={t.brokerGain} base={t.brokerCost} /> },
                 { k: '成本殖利率・稅後', v: pct(r.yoc.brokerNet) },
               ]}
@@ -84,12 +90,12 @@ export function Overview({ report: r, store }: PageProps) {
             <div className="eyebrow">差異</div>
             <Leaders
               rows={[
-                { k: '延續成本 − 券商成本', v: money(costGap, { sign: true }) },
+                { k: `延續成本 − ${B}`, v: money(costGap, { sign: true }) },
                 { k: '遷移配對筆數', v: String(r.migration.matches.length) },
               ]}
             />
             <p className="muted" style={{ fontSize: 12 }}>
-              遷移前兩者相同。在永豐買回後，券商成本變成永豐的新買進成本；延續成本保留 Schwab 時期的原始成本，再加上賣出與買回之間的價差和手續費。
+              {costGapNote(holds)}
             </p>
           </div>
         </div>

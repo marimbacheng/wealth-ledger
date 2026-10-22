@@ -3,6 +3,7 @@ import type { PageProps } from '../../App';
 import { DPS_SOURCE_LABEL } from '../../engine/report';
 import { DividendYearChart } from '../charts';
 import { Card, Kpi, TaxBadge, TotalsBadge } from '../components';
+import { brokerCostName, schwabHolds } from '../costTerms';
 import { money, moneyIn, pct, qty } from '../format';
 
 export function Dividends({ report: r, store }: PageProps) {
@@ -96,7 +97,7 @@ export function Dividends({ report: r, store }: PageProps) {
                   <th>殖利率（現價）</th>
                   <th>成本殖利率（延續成本・稅前）</th>
                   <th>成本殖利率（延續成本・稅後）</th>
-                  <th>成本殖利率（券商成本・稅後）</th>
+                  <th>成本殖利率（{brokerCostName(schwabHolds(r.holdings))}・稅後）</th>
                 </tr>
               </thead>
               <tbody>

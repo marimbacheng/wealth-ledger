@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Sector, Tooltip, XAxis, YAxis } from 'recharts';
 import { ramp, type RampSpec } from './color';
-import { compactMoney, money, pct } from './format';
+import { compactMoney, money, niceAxis, pct, yearTicks } from './format';
 
 // 折線、長條只用驗證過的兩個分類色（series-1 石油藍、series-2 赭黃），其餘是文字與細線色。
 const C = {
@@ -51,7 +51,7 @@ function Tip({ active, label, payload, extra }: TipProps & { extra?: (p: Record<
   const row = payload[0].payload ?? {};
   return (
     <div className="chart-tip">
-      <div className="t">{label}</div>
+      <div className="t">{(row.date as string | undefined) ?? label}</div>
       {payload.map((p) => (
         <div key={p.name}>
           <i style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: p.color, marginRight: 6 }} />
@@ -140,6 +140,12 @@ export function GradientDonut(props: {
 // 資產成長：總值與累計淨投入，同一個 USD 軸
 export function ValueChart({ data }: { data: { date: string; value: number; contribution?: number }[] }) {
   const hasContrib = data.some((d) => d.contribution != null);
+  // 依實際日期等比例排列（資料點間隔不均也不會失真），刻度標年份
+  const points = data.map((d) => ({ ...d, t: Date.parse(`${d.date}T00:00:00Z`) }));
+  const min = points[0]?.t ?? 0;
+  const max = points[points.length - 1]?.t ?? 0;
+  const values = points.flatMap((p) => [p.value, ...(p.contribution != null ? [p.contribution] : [])]);
+  const y = niceAxis(Math.min(...values), Math.max(...values));
   return (
     <>
       <div className="legend">
@@ -156,16 +162,19 @@ export function ValueChart({ data }: { data: { date: string; value: number; cont
       </div>
       <div style={{ width: '100%', height: 240 }}>
         <ResponsiveContainer>
-          <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+          <LineChart data={points} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke={C.grid} />
-            <XAxis dataKey="date" tick={tick} stroke={C.axis} minTickGap={24} />
-            <YAxis
+            <XAxis
+              dataKey="t"
+              type="number"
+              scale="time"
+              domain={[min, max]}
+              ticks={yearTicks(min, max)}
+              tickFormatter={(t: number) => String(new Date(t).getUTCFullYear())}
               tick={tick}
-              tickFormatter={compact}
               stroke={C.axis}
-              width={52}
-              domain={[(min: number) => Math.floor((min * 0.9) / 1000) * 1000, (max: number) => Math.ceil((max * 1.05) / 1000) * 1000]}
             />
+            <YAxis tick={tick} tickFormatter={compact} stroke={C.axis} width={52} domain={y.domain} ticks={y.ticks} />
             <Tooltip content={<Tip />} cursor={{ stroke: C.muted }} />
             <Line type="monotone" dataKey="value" name="帳戶總值" stroke={C.s1} strokeWidth={2} dot={{ r: 4, fill: C.s1, stroke: 'var(--page)', strokeWidth: 2 }} activeDot={{ r: 5 }} />
             {hasContrib && <Line type="stepAfter" dataKey="contribution" name="累計淨投入" stroke={C.s2} strokeWidth={2} dot={false} />}

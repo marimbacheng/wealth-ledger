@@ -2,17 +2,17 @@ import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import type { PageProps } from '../../App';
 import type { HoldingRow } from '../../engine/report';
 import { Card, Gain, Notice, Seg } from '../components';
-import { COST_TERMS, costHint } from '../costTerms';
+import { brokerCostName, costGapNote, costHint, costTerms, schwabHolds } from '../costTerms';
 import { holdingsCsv, holdingsMarkdown } from '../exportHoldings';
 import { money, moneyIn, pct, qty, today } from '../format';
 
-type View = 'all' | 'actual' | 'cont';
+type View = 'all' | 'broker' | 'cont';
 type Dir = 'asc' | 'desc';
 
 interface Col {
   key: string;
-  label: ReactNode;
-  group?: 'actual' | 'cont';
+  label: string;
+  group?: 'broker' | 'cont';
   text?: boolean; // 文字欄：預設升冪、靠左
   hint?: string; // 滑過欄位名稱時的說明
   sortValue: (h: HoldingRow) => number | string;
@@ -32,11 +32,45 @@ function download(name: string, text: string, type: string) {
 const avg = (cost: number, q: number) => (q > 0 ? cost / q : 0);
 const ratio = (a: number, b: number) => (b > 0 ? a / b : -Infinity);
 
+// 欄位順序與顯示：每台裝置各自記住（和外觀設定一樣，不同步）。代號固定在最前面。
+const PREF_KEY = 'holdingsColumns';
+interface ColPref {
+  order: string[];
+  hidden: string[];
+}
+function loadPref(): ColPref {
+  try {
+    const v = JSON.parse(localStorage.getItem(PREF_KEY) ?? '');
+    if (Array.isArray(v?.order) && Array.isArray(v?.hidden)) return v;
+  } catch {
+    // 沒存過或無法讀取：用預設
+  }
+  return { order: [], hidden: [] };
+}
+function savePref(p: ColPref) {
+  try {
+    localStorage.setItem(PREF_KEY, JSON.stringify(p));
+  } catch {
+    // 無痕模式等情況存不了，只影響下次開啟
+  }
+}
+// 記住的順序在前，之後新增的欄位照預設順序接在後面
+function arrange(cols: Col[], order: string[]): Col[] {
+  const [first, ...rest] = cols;
+  const known = order.map((k) => rest.find((c) => c.key === k)).filter((c): c is Col => !!c);
+  return [first, ...known, ...rest.filter((c) => !order.includes(c.key))];
+}
+
 export function Holdings({ report: r }: PageProps) {
   const [view, setView] = useState<View>('all');
   const [sort, setSort] = useState<{ key: string; dir: Dir }>({ key: 'marketValue', dir: 'desc' });
   const [msg, setMsg] = useState<string[]>([]);
+  const [pref, setPrefState] = useState<ColPref>(loadPref);
+  const [picking, setPicking] = useState(false);
+  const setPref = (p: ColPref) => (setPrefState(p), savePref(p));
   const t = r.totals;
+  const holds = schwabHolds(r.holdings);
+  const B = brokerCostName(holds); // Schwab 已清空時就是「永豐成本」
   const schwabCostTotal = t.brokerCost - t.twCost;
 
   const cols: Col[] = [
@@ -58,34 +92,38 @@ export function Holdings({ report: r }: PageProps) {
     { key: 'sector', label: '產業', text: true, sortValue: (h) => h.sector, cell: (h) => h.sector },
     { key: 'currency', label: '幣別', text: true, sortValue: (h) => h.currency, cell: (h) => (h.currency === 'TWD' ? '台幣' : '美元') },
     { key: 'qty', label: '股數', sortValue: (h) => h.qty, cell: (h) => qty(Number(h.qty.toFixed(4))) },
-    { key: 'price', label: '現價', sortValue: (h) => (h.price ?? -Infinity) / (h.currency === 'TWD' ? (r.fx?.rate ?? 1) : 1), cell: (h) => (h.price != null ? moneyIn(h.price, h.currency) : '—') },
+    { key: 'price', label: '現價', hint: '最近一次匯入或輸入的價格（原幣）；滑過價格看日期', sortValue: (h) => (h.price ?? -Infinity) / (h.currency === 'TWD' ? (r.fx?.rate ?? 1) : 1), cell: (h) => (h.price != null ? moneyIn(h.price, h.currency) : '—') },
     { key: 'marketValue', label: '市值', sortValue: (h) => h.marketValue, cell: (h) => money(h.marketValue), foot: money(t.marketValue) },
     { key: 'weight', label: '比重', sortValue: (h) => h.weight, cell: (h) => pct(h.weight, 1), foot: '100%' },
-    // 券商成本：各券商帳上
-    { key: 'schwabCost', label: 'Schwab 成本', hint: costHint('Schwab 成本'), group: 'actual', sortValue: (h) => h.schwabCost, cell: (h) => (h.schwabQty > 0 ? money(h.schwabCost) : '—'), foot: money(schwabCostTotal) },
-    { key: 'twCost', label: '永豐成本', hint: costHint('永豐成本'), group: 'actual', sortValue: (h) => h.twCost, cell: (h) => (h.twQty > 0 ? money(h.twCost) : '—'), foot: money(t.twCost) },
-    { key: 'brokerCost', label: '券商成本', hint: costHint('券商成本'), group: 'actual', sortValue: (h) => h.brokerCost, cell: (h) => money(h.brokerCost), foot: money(t.brokerCost) },
-    { key: 'brokerAvg', label: '券商均價', hint: '券商成本 ÷ 股數（原幣）', group: 'actual', sortValue: (h) => avg(h.brokerCost, h.qty), cell: (h) => moneyIn(avg(h.native.brokerCost, h.qty), h.currency) },
+    // 券商帳上的成本；Schwab 清空後只剩永豐
+    ...(holds
+      ? ([
+          { key: 'schwabCost', label: 'Schwab 成本', hint: costHint(holds, 'Schwab 成本'), group: 'broker', sortValue: (h) => h.schwabCost, cell: (h) => (h.schwabQty > 0 ? money(h.schwabCost) : '—'), foot: money(schwabCostTotal) },
+          { key: 'twCost', label: '永豐成本', hint: costHint(holds, '永豐成本'), group: 'broker', sortValue: (h) => h.twCost, cell: (h) => (h.twQty > 0 ? money(h.twCost) : '—'), foot: money(t.twCost) },
+        ] satisfies Col[])
+      : []),
+    { key: 'brokerCost', label: B, hint: costHint(holds, B), group: 'broker', sortValue: (h) => h.brokerCost, cell: (h) => money(h.brokerCost), foot: money(t.brokerCost) },
+    { key: 'brokerAvg', label: `${B.replace('成本', '')}均價`, hint: `${B} ÷ 股數（原幣）`, group: 'broker', sortValue: (h) => avg(h.brokerCost, h.qty), cell: (h) => moneyIn(avg(h.native.brokerCost, h.qty), h.currency) },
     {
       key: 'brokerGain',
-      label: '帳面盈虧（券商成本）',
-      hint: '市值 − 券商成本',
-      group: 'actual',
+      label: `帳面盈虧（${B}）`,
+      hint: `市值 − ${B}`,
+      group: 'broker',
       sortValue: (h) => h.brokerGain,
       cell: (h) => <Gain value={h.brokerGain} base={h.brokerCost} />,
       foot: <Gain value={t.brokerGain} base={t.brokerCost} />,
     },
     {
       key: 'brokerYoc',
-      label: '成本殖利率（券商成本・稅後）',
-      hint: '未來 12 個月預估稅後股息 ÷ 券商成本',
-      group: 'actual',
+      label: `成本殖利率（${B}・稅後）`,
+      hint: `未來 12 個月預估稅後股息 ÷ ${B}`,
+      group: 'broker',
       sortValue: (h) => ratio(h.forecast.net, h.brokerCost),
       cell: (h) => pct(h.brokerCost > 0 ? h.forecast.net / h.brokerCost : undefined),
       foot: pct(r.yoc.brokerNet),
     },
     // 延續成本：從第一次買進算起
-    { key: 'contCost', label: '延續成本', hint: costHint('延續成本'), group: 'cont', sortValue: (h) => h.contCost, cell: (h) => money(h.contCost), foot: money(t.contCost) },
+    { key: 'contCost', label: '延續成本', hint: costHint(holds, '延續成本'), group: 'cont', sortValue: (h) => h.contCost, cell: (h) => money(h.contCost), foot: money(t.contCost) },
     { key: 'contAvg', label: '延續均價', hint: '延續成本 ÷ 股數（原幣）', group: 'cont', sortValue: (h) => avg(h.contCost, h.qty), cell: (h) => moneyIn(avg(h.native.contCost, h.qty), h.currency) },
     {
       key: 'contGain',
@@ -114,7 +152,8 @@ export function Holdings({ report: r }: PageProps) {
     },
     { key: 'fwdNet', label: '預估年股息（稅後）', sortValue: (h) => h.forecast.net, cell: (h) => money(h.forecast.net), foot: money(r.forecast.net) },
   ];
-  const visible = cols.filter((c) => !c.group || view === 'all' || c.group === view);
+  const ordered = arrange(cols, pref.order);
+  const visible = ordered.filter((c) => !pref.hidden.includes(c.key) && (!c.group || view === 'all' || c.group === view));
 
   const rows = useMemo(() => {
     const col = cols.find((c) => c.key === sort.key) ?? cols[0];
@@ -131,6 +170,15 @@ export function Holdings({ report: r }: PageProps) {
 
   function toggle(c: Col) {
     setSort((s) => (s.key === c.key ? { key: c.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: c.key, dir: c.text ? 'asc' : 'desc' }));
+  }
+
+  function move(key: string, d: -1 | 1) {
+    const keys = ordered.slice(1).map((c) => c.key);
+    const i = keys.indexOf(key);
+    const j = i + d;
+    if (i < 0 || j < 0 || j >= keys.length) return;
+    [keys[i], keys[j]] = [keys[j], keys[i]];
+    setPref({ ...pref, order: keys });
   }
 
   async function copyForClaude() {
@@ -150,31 +198,64 @@ export function Holdings({ report: r }: PageProps) {
       desc="現價、均價用原幣別；其餘金額依頁首選的幣別顯示（台股依匯率換算）。點欄位名稱可排序，滑過欄位名稱看說明。"
     >
       <dl className="defs">
-        {COST_TERMS.map((c) => (
+        {costTerms(holds).map((c) => (
           <Fragment key={c.name}>
             <dt>{c.name}</dt>
             <dd>{c.what}</dd>
             <dd className="use">用途：{c.use}</dd>
           </Fragment>
         ))}
+        <dt>兩者差在哪</dt>
+        <dd className="wide">{costGapNote(holds)}</dd>
       </dl>
       <div className="row" style={{ marginBottom: 10, justifyContent: 'space-between' }}>
         <Seg
           value={view}
           onChange={setView}
           options={[
-            { value: 'all', label: '全部' },
-            { value: 'actual', label: '券商成本' },
-            { value: 'cont', label: '延續成本' },
+            { value: 'all', label: '全部欄位' },
+            { value: 'broker', label: `只看${B}` },
+            { value: 'cont', label: '只看延續成本' },
           ]}
         />
         <div className="row">
+          <button onClick={() => setPicking((x) => !x)} aria-expanded={picking}>
+            {picking ? '完成' : '調整欄位'}
+          </button>
           <button className="primary" onClick={copyForClaude}>
             複製給 Claude 分析
           </button>
           <button onClick={() => download(`持股明細-${today()}.csv`, holdingsCsv(rows), 'text/csv')}>下載 CSV</button>
         </div>
       </div>
+      {picking && (
+        <div className="colpicker">
+          <p className="desc">用 ↑ ↓ 調整順序、取消勾選隱藏欄位；只記在這台裝置。代號固定在最前面。</p>
+          <ol>
+            {ordered.slice(1).map((c, i, all) => (
+              <li key={c.key}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!pref.hidden.includes(c.key)}
+                    onChange={(e) => setPref({ ...pref, hidden: e.target.checked ? pref.hidden.filter((k) => k !== c.key) : [...pref.hidden, c.key] })}
+                  />
+                  {c.label}
+                </label>
+                <span>
+                  <button aria-label={`${c.label} 往前`} disabled={i === 0} onClick={() => move(c.key, -1)}>
+                    ↑
+                  </button>
+                  <button aria-label={`${c.label} 往後`} disabled={i === all.length - 1} onClick={() => move(c.key, 1)}>
+                    ↓
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ol>
+          <button onClick={() => setPref({ order: [], hidden: [] })}>恢復預設</button>
+        </div>
+      )}
       <Notice items={msg} />
       <div className="table-wrap">
         <table>
