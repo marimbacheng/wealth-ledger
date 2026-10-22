@@ -177,7 +177,7 @@ export function Ledger({ store, update }: PageProps) {
             )}
             {!isTrade && !isDiv && (
               <label className="field">
-                {isOpen ? '總成本' : '金額'}
+                {isOpen ? '持有成本（全部股數）' : '金額'}
                 <input type="number" step="any" value={form.金額} onChange={set('金額')} />
               </label>
             )}

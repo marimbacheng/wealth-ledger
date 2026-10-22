@@ -29,7 +29,7 @@ describe('持股明細匯出', () => {
     expect(lines).toHaveLength(1 + 2);
     expect(lines[0].split(',')).toHaveLength(EXPORT_FIELDS.length);
     expect(csv).toContain('"AAA, ""Inc"""');
-    // 依市值排序：AAA 在前；Schwab 成本 400、永豐 0、總成本 400
+    // 依市值排序：AAA 在前；Schwab 成本 400、永豐 0、券商成本 400
     expect(lines[1]).toMatch(/^AAA,/);
     expect(lines[1]).toContain(',400,0,400,');
   });
@@ -38,7 +38,8 @@ describe('持股明細匯出', () => {
     const r = report();
     const md = holdingsMarkdown(r, r.holdings);
     expect(md).toContain('# 持股明細（資料日 2026-10-19');
-    expect(md).toContain('總成本（Schwab 650 ＋ 永豐 0）650');
+    expect(md).toContain('券商成本（Schwab 650 ＋ 永豐 0）650');
+    expect(md).toContain('- 延續成本：從第一次買進算起的成本');
     expect(md).toContain('BBB \\| Corp');
     const tableRows = md.split('\n').filter((l) => l.startsWith('| ') && !l.startsWith('| ---'));
     expect(tableRows).toHaveLength(1 + 2);

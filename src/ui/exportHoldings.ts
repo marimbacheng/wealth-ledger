@@ -1,3 +1,4 @@
+import { COST_TERMS } from './costTerms';
 import type { HoldingRow, Report } from '../engine/report';
 import { DPS_SOURCE_LABEL } from '../engine/report';
 
@@ -26,10 +27,10 @@ export const EXPORT_FIELDS: Field[] = [
   { label: '比重%', get: (h) => r2(h.weight * 100) },
   { label: 'Schwab成本(原幣)', get: (h) => r2(h.native.schwabCost) },
   { label: '永豐成本(原幣)', get: (h) => r2(h.native.twCost) },
-  { label: '總成本(原幣)', get: (h) => r2(h.native.brokerCost) },
-  { label: '總成本(USD)', get: (h) => r2(h.brokerCost) },
-  { label: '帳面盈虧(總成本・USD)', get: (h) => r2(h.brokerGain) },
-  { label: '報酬率%(總成本)', get: (h) => ratio(h.brokerGain, h.brokerCost) },
+  { label: '券商成本(原幣)', get: (h) => r2(h.native.brokerCost) },
+  { label: '券商成本(USD)', get: (h) => r2(h.brokerCost) },
+  { label: '帳面盈虧(券商成本・USD)', get: (h) => r2(h.brokerGain) },
+  { label: '報酬率%(券商成本)', get: (h) => ratio(h.brokerGain, h.brokerCost) },
   { label: '延續成本(原幣)', get: (h) => r2(h.native.contCost) },
   { label: '延續成本(USD)', get: (h) => r2(h.contCost) },
   { label: '帳面盈虧(延續成本・USD)', get: (h) => r2(h.contGain) },
@@ -41,7 +42,7 @@ export const EXPORT_FIELDS: Field[] = [
   { label: '預估年股息(稅後・USD)', get: (h) => r2(h.forecast.net) },
   { label: '殖利率%(現價)', get: (h) => (h.price ? r2((h.forecast.dps / h.price) * 100) : '') },
   { label: '成本殖利率%(延續成本・稅後)', get: (h) => ratio(h.forecast.net, h.contCost) },
-  { label: '成本殖利率%(總成本・稅後)', get: (h) => ratio(h.forecast.net, h.brokerCost) },
+  { label: '成本殖利率%(券商成本・稅後)', get: (h) => ratio(h.forecast.net, h.brokerCost) },
   { label: '累積股利(稅後・USD)', get: (h) => r2(h.dividends?.net ?? 0) },
   { label: '股利再投入增加股數', get: (h) => r4(h.drip?.qty ?? 0) },
 ];
@@ -67,14 +68,13 @@ export function holdingsMarkdown(r: Report, rows: HoldingRow[]): string {
     '',
     '## 合計',
     `- 市值 ${r2(t.marketValue)}；現金 ${r2(t.schwabCash + t.twCash)}；總值 ${r2(t.totalValue)}`,
-    `- 總成本（Schwab ${r2(t.brokerCost - t.twCost)} ＋ 永豐 ${r2(t.twCost)}）${r2(t.brokerCost)} USD，帳面盈虧 ${r2(t.brokerGain)}`,
+    `- 券商成本（Schwab ${r2(t.brokerCost - t.twCost)} ＋ 永豐 ${r2(t.twCost)}）${r2(t.brokerCost)} USD，帳面盈虧 ${r2(t.brokerGain)}`,
     `- 延續成本 ${r2(t.contCost)}，帳面盈虧 ${r2(t.contGain)}`,
     `- 未來 12 個月預估股息：稅前 ${r2(r.forecast.gross)}、稅後 ${r2(r.forecast.net)}（${r.forecast.label}）`,
     `- 累積股利：稅前 ${r2(r.dividends.total.gross)}、預扣稅 ${r2(r.dividends.total.tax)}、稅後 ${r2(r.dividends.total.net)}`,
     '',
     '## 欄位說明',
-    '- 總成本 = 各券商帳上的實際成本（Schwab＋永豐），用於報稅與對帳。',
-    '- 延續成本 = Schwab 時期的原始成本延續到永豐的部位（含遷移時賣出與買回的價差與手續費），用於長期報酬與成本殖利率。',
+    ...COST_TERMS.map((c) => `- ${c.name}：${c.what}用途：${c.use}。`),
     '- 預扣稅率取自實際入帳紀錄（台股預設 0%）；成本殖利率以未來 12 個月預估稅後股息計算。',
     '- 台股以台幣記帳，「(原幣)」欄為台幣；「(USD)」欄用目前匯率換算。',
     `- 資料涵蓋：${cov || '無'}。累積股利與已實現損益只含已匯入的期間。`,

@@ -44,7 +44,7 @@ export interface HoldingRow {
   contCost: number;
   contGain: number;
   schwabCost: number; // 還在 Schwab 的股數，Schwab 帳上成本
-  brokerCost: number; // 總成本 = Schwab 成本 + 永豐成本（各券商帳上實際成本）
+  brokerCost: number; // 券商成本 = Schwab 成本 + 永豐成本（各券商帳上的成本）
   brokerGain: number;
   twCost: number;
   twValue: number;

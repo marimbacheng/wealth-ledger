@@ -96,7 +96,7 @@ export function Dividends({ report: r, store }: PageProps) {
                   <th>殖利率（現價）</th>
                   <th>成本殖利率（延續成本・稅前）</th>
                   <th>成本殖利率（延續成本・稅後）</th>
-                  <th>成本殖利率（總成本・稅後）</th>
+                  <th>成本殖利率（券商成本・稅後）</th>
                 </tr>
               </thead>
               <tbody>

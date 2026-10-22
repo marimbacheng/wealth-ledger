@@ -55,22 +55,22 @@ export function Overview({ report: r, store }: PageProps) {
         </div>
       </Section>
 
-      <Section no="02" title="成本" aside="總成本拿來報稅與對帳；延續成本拿來看長期報酬與成本殖利率">
+      <Section no="02" title="成本" aside="券商成本拿來報稅與對帳；延續成本拿來看從第一次買進到現在的報酬">
         <div className="grid">
           <div>
-            <div className="eyebrow">實際成本・各券商帳上</div>
+            <div className="eyebrow">券商成本・兩家券商帳上</div>
             <Leaders
               rows={[
                 { k: 'Schwab 成本', v: hasSchwab ? money(schwabCost) : '已全數轉出' },
                 { k: '永豐成本', v: hasTw ? money(t.twCost) : '尚未買進' },
-                { k: '總成本', v: money(t.brokerCost), total: true },
+                { k: '券商成本', v: money(t.brokerCost), total: true },
                 { k: '帳面盈虧', v: <Gain value={t.brokerGain} base={t.brokerCost} /> },
                 { k: '成本殖利率・稅後', v: pct(r.yoc.brokerNet) },
               ]}
             />
           </div>
           <div>
-            <div className="eyebrow">延續成本・含 Schwab 時期</div>
+            <div className="eyebrow">延續成本・從第一次買進算起</div>
             <Leaders
               rows={[
                 { k: '延續成本', v: money(t.contCost) },
@@ -84,12 +84,12 @@ export function Overview({ report: r, store }: PageProps) {
             <div className="eyebrow">差異</div>
             <Leaders
               rows={[
-                { k: '延續成本 − 總成本', v: money(costGap, { sign: true }) },
+                { k: '延續成本 − 券商成本', v: money(costGap, { sign: true }) },
                 { k: '遷移配對筆數', v: String(r.migration.matches.length) },
               ]}
             />
             <p className="muted" style={{ fontSize: 12 }}>
-              遷移前兩者相同。在永豐買回後，總成本變成永豐的新買進成本；延續成本保留 Schwab 時期的原始成本，再加上賣出與買回之間的價差和手續費。
+              遷移前兩者相同。在永豐買回後，券商成本變成永豐的新買進成本；延續成本保留 Schwab 時期的原始成本，再加上賣出與買回之間的價差和手續費。
             </p>
           </div>
         </div>
