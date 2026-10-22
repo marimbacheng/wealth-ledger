@@ -2,7 +2,6 @@ import { currencyOf, rateAt, txnCurrency } from '../domain/currency';
 import type { Store, Txn } from '../domain/types';
 import { CASH_SOURCES, computeLedgers, migrationSells, pickAnchor } from './ledger';
 import { externalFlows } from './report';
-import { xirr } from './xirr';
 
 // 每日帳戶總值、年度表現與 Beta。
 // 持股與現金用交易紀錄從錨點快照往回推（之前）或往後推（之後），價格用歷史收盤（還原分割），
@@ -349,21 +348,4 @@ export function benchValues(rows: BenchRow[], k: 'spx' | 'ndx'): (number | undef
     if (i > 0 && r.flow) units += r.flow / p;
     return units * p;
   });
-}
-
-// 指數版的年化報酬率：起算日總值與之後每筆投入都改買指數，用同樣的金流算 XIRR
-export function benchXirr(rows: BenchRow[], since: string | undefined, amount: number | undefined, to: string, ours: number) {
-  if (!since || amount == null || !rows.length) return undefined;
-  const after = rows.filter((r) => r.date > since);
-  const startRow = [...rows].reverse().find((r) => r.date <= since) ?? rows[0];
-  const one = (k: 'spx' | 'ndx') => {
-    const p0 = startRow[k];
-    const pEnd = rows[rows.length - 1][k];
-    if (!p0 || !pEnd) return undefined;
-    let units = amount / p0;
-    for (const r of after) if (r.flow && r[k]) units += r.flow / r[k]!;
-    const flows = [{ date: since, amount: -amount }, ...after.filter((r) => r.flow).map((r) => ({ date: r.date, amount: -r.flow! })), { date: to, amount: units * pEnd }];
-    return xirr(flows);
-  };
-  return { spx: one('spx'), ndx: one('ndx'), ours };
 }

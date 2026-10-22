@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Store } from '../domain/types';
 import type { Report } from '../engine/report';
-import { benchXirr, betaSource, checks, dailyValues, dataStart, monthlyBeta, NDX, NDX_TR, SPX, SPX_TR, twrIndex, USDTWD, yearlyRows, type History, type PriceSeries } from '../engine/performance';
+import { betaSource, checks, dailyValues, dataStart, monthlyBeta, NDX, NDX_TR, SPX, SPX_TR, twrIndex, USDTWD, yearlyRows, type History, type PriceSeries } from '../engine/performance';
 import { xirr } from '../engine/xirr';
 import { pickAnchor } from '../engine/ledger';
 
@@ -146,7 +146,6 @@ export function useAnalytics(store: Store, report: Report) {
       checks: checks(store, points),
       chart,
       index: { portfolio: idx, spx: series(hist[SPX_TR] ? SPX_TR : SPX), ndx: series(hist[NDX_TR] ? NDX_TR : NDX) },
-      bench: benchXirr(chart, report.totalReturn.since, store.settings.openingContribution?.amount, to, report.totals.totalValue),
       suggest: start ? { date: start.date, value: start.value, xirr: suggestXirr } : undefined,
     };
   }, [daily.series, store, from, to, report.totals.totalValue]);

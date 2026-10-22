@@ -1,5 +1,5 @@
 import { emptyStore, type Store, type Txn } from '../src/domain/types';
-import { benchValues, benchXirr, betaSource, checks, dailyValues, dataStart, monthlyBeta, periodStats, SPX, twrIndex, unadjusted, yearlyRows, type History, type PriceSeries } from '../src/engine/performance';
+import { benchValues, betaSource, checks, dailyValues, dataStart, monthlyBeta, periodStats, SPX, twrIndex, unadjusted, yearlyRows, type History, type PriceSeries } from '../src/engine/performance';
 import { handleHistory, parseChart } from '../worker/history';
 
 let seq = 0;
@@ -183,10 +183,5 @@ describe('和指數比較', () => {
   it('同樣的金流改買指數：起點總值與每筆入金都換成當天的指數單位', () => {
     expect(benchValues(rows, 'spx')).toEqual([1000, 1100, 1650, (10 + 5) * 121]);
     expect(benchValues(rows, 'ndx')).toEqual([undefined, undefined, undefined, undefined]);
-  });
-  it('指數版的年化報酬率：指數每年 +10%，不管何時投入都是 10%', () => {
-    const b = benchXirr(rows, '2024-01-01', 1000, '2026-01-01', 0.12)!;
-    expect(b.spx!).toBeCloseTo(0.1, 2);
-    expect(b.ndx).toBeUndefined();
   });
 });
