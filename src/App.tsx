@@ -7,6 +7,7 @@ import { loadStore, saveStore } from './store/persist';
 import { setDisplay, today } from './ui/format';
 import { useFx } from './fx/useFx';
 import { useQuotes } from './quotes/useQuotes';
+import { useAnalytics } from './perf/useAnalytics';
 import { Dividends } from './ui/pages/Dividends';
 import { Holdings } from './ui/pages/Holdings';
 import { Ledger } from './ui/pages/Ledger';
@@ -87,6 +88,7 @@ export default function App() {
   const update = useCallback((fn: (s: Store) => Store) => setStore((s) => fn(structuredClone(s))), []);
   const fx = useFx(store, update);
   const quotes = useQuotes(store, report.holdings, update);
+  const analytics = useAnalytics(store, report);
 
   // 匯入要同步回傳結果，所以從 ref 取目前資料、算完再一次 setStore（不能放在 updater 裡，StrictMode 會跑兩次）
   const storeRef = useRef(store);
@@ -197,8 +199,8 @@ export default function App() {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview {...props} />}
-          {tab === 'holdings' && <Holdings {...props} quotes={quotes} />}
+          {tab === 'overview' && <Overview {...props} analytics={analytics} />}
+          {tab === 'holdings' && <Holdings {...props} quotes={quotes} analytics={analytics} />}
           {tab === 'dividends' && <Dividends {...props} />}
           {tab === 'ledger' && <Ledger {...props} />}
           {tab === 'migration' && <Migration {...props} />}

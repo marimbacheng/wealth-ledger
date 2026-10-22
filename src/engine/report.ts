@@ -148,7 +148,7 @@ function frequencyFrom(count: number): number {
 }
 
 // 每檔在某天的價格：當天或之前最近的一筆；更早都沒有就用之後最早的一筆。期初持股的成本不當價格。
-function priceHistory(store: Store): (symbol: string, date: string) => number | undefined {
+export function priceHistory(store: Store): (symbol: string, date: string) => number | undefined {
   const m = new Map<string, { date: string; price: number }[]>();
   const add = (sym: string | undefined, date: string, price: number | undefined) => {
     if (!sym || !price || price <= 0) return;

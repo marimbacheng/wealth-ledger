@@ -4,8 +4,10 @@ import { HOLDING_RAMP, SECTOR_RAMP } from '../color';
 import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components';
 import { brokerCostName, schwabHolds } from '../costTerms';
 import { money, pct, tone } from '../format';
+import type { Analytics } from '../../perf/useAnalytics';
+import { YearTable } from '../YearTable';
 
-export function Overview({ report: r, store }: PageProps) {
+export function Overview({ report: r, store, analytics: a }: PageProps & { analytics?: Analytics }) {
   const t = r.totals;
   const tr = r.totalReturn;
   const hasTw = t.twCost > 0 || r.dividends.twYtd.count > 0;
@@ -56,6 +58,13 @@ export function Overview({ report: r, store }: PageProps) {
               <p className="muted" style={{ fontSize: 12, margin: 0 }}>
                 到「匯入與設定」填入報酬起算點（日期與當天的帳戶總值，例如 Schwab 績效報表的 Beginning Value），這裡會顯示年化報酬率。
               </p>
+            )}
+            {a?.beta?.portfolio != null && (
+              <Kpi
+                label="Beta・相對 S&P 500"
+                value={a.beta.portfolio.toFixed(2)}
+                foot={`近 5 年月報酬；有美股 ADR 的台股用 ADR（2330 用 TSM）；現金以 0 計${a.beta.missing.length ? `；${a.beta.missing.join('、')} 資料不足未計入` : ''}`}
+              />
             )}
             <Kpi label={`未來 12 個月預估股息・稅後（${r.forecast.label}）`} value={money(r.forecast.net)} foot={`稅前 ${money(r.forecast.gross)}，預扣 ${money(r.forecast.tax)}`} />
           </div>
@@ -137,11 +146,15 @@ export function Overview({ report: r, store }: PageProps) {
         </div>
       </Section>
 
-      <Section no="05" title="資產成長" aside={r.valueSeries.length < 3 ? '資料點還很少；可在「設定」補登過去對帳單的月底總值' : undefined}>
-        {r.valueSeries.length > 0 ? <ValueChart data={r.valueSeries} /> : <p className="muted">尚無資產快照</p>}
+      <Section no="05" title="資產成長" aside={a?.perf ? '每日收盤重建的帳戶總值' : r.valueSeries.length < 3 ? '資料點還很少；可在「設定」補登過去對帳單的月底總值' : undefined}>
+        {a?.perf?.chart.length ? <ValueChart data={a.perf.chart} /> : r.valueSeries.length > 0 ? <ValueChart data={r.valueSeries} /> : <p className="muted">尚無資產快照</p>}
       </Section>
 
-      <Section no="06" title="資料涵蓋範圍" aside="累積數字只包含已匯入的期間">
+      <Section no="06" title="年度表現" aside="和 S&P 500、NASDAQ 同期比較">
+        {a ? <YearTable a={a} /> : null}
+      </Section>
+
+      <Section no="07" title="資料涵蓋範圍" aside="累積數字只包含已匯入的期間">
         <div className="table-wrap">
           <table>
             <thead>

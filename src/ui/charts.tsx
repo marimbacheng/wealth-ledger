@@ -176,7 +176,7 @@ export function ValueChart({ data }: { data: { date: string; value: number; cont
             />
             <YAxis tick={tick} tickFormatter={compact} stroke={C.axis} width={52} domain={y.domain} ticks={y.ticks} />
             <Tooltip content={<Tip />} cursor={{ stroke: C.muted }} />
-            <Line type="monotone" dataKey="value" name="帳戶總值" stroke={C.s1} strokeWidth={2} dot={{ r: 4, fill: C.s1, stroke: 'var(--page)', strokeWidth: 2 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="value" name="帳戶總值" stroke={C.s1} strokeWidth={2} dot={points.length > 60 ? false : { r: 4, fill: C.s1, stroke: 'var(--page)', strokeWidth: 2 }} activeDot={{ r: 5 }} isAnimationActive={points.length <= 60} />
             {hasContrib && <Line type="stepAfter" dataKey="contribution" name="累計投入" stroke={C.s2} strokeWidth={2} dot={false} />}
           </LineChart>
         </ResponsiveContainer>

@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
 import { createFakeGithub } from './dev/fakeGithub';
+import { handleHistory } from './worker/history';
 import { handleQuotes } from './worker/quotes';
 
 // 只在開發伺服器啟用：/__fake-github 模擬 GitHub Contents API，用來在瀏覽器裡測試兩台裝置同步
@@ -26,19 +27,22 @@ function fakeGithub(): Plugin {
   };
 }
 
-// 開發伺服器也提供 /api/quotes（正式環境由 Cloudflare Worker 提供），用同一份程式
+// 開發伺服器也提供 /api/quotes 與 /api/history（正式環境由 Cloudflare Worker 提供），用同一份程式
 function quotesApi(): Plugin {
   return {
     name: 'quotes-api',
     apply: 'serve',
     configureServer(server) {
-      server.middlewares.use('/api/quotes', (req, res) => {
-        void handleQuotes(new Request(`http://localhost${req.originalUrl ?? req.url ?? ''}`, { method: req.method }), (url, init) => fetch(url, init)).then(async (r) => {
-          res.statusCode = r.status;
-          r.headers.forEach((v, k) => res.setHeader(k, v));
-          res.end(await r.text());
+      const route = (path: string, handler: typeof handleQuotes) =>
+        server.middlewares.use(path, (req, res) => {
+          void handler(new Request(`http://localhost${req.originalUrl ?? req.url ?? ''}`, { method: req.method }), (url, init) => fetch(url, init)).then(async (r) => {
+            res.statusCode = r.status;
+            r.headers.forEach((v, k) => res.setHeader(k, v));
+            res.end(await r.text());
+          });
         });
-      });
+      route('/api/quotes', handleQuotes);
+      route('/api/history', handleHistory);
     },
   };
 }

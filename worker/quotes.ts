@@ -1,4 +1,5 @@
 // 報價中繼：台股用證交所（上市）與櫃買中心（上櫃）的官方 OpenAPI 每日收盤，美股用 Yahoo 的 chart 介面（非官方）。
+// 台股盤中先用證交所即時行情（基本市況報導，延遲數秒；收盤後給當天收盤價），沒有成交價時才用每日收盤。
 // 官方來源查不到（例如櫃買中心擋掉 Cloudflare 的連線，2026-10-22 實測）時，台股改查 Yahoo 的 .TW／.TWO。
 // 這些來源都沒有開放瀏覽器跨網域呼叫，所以由 Cloudflare Worker（開發時由 Vite）轉送；前端只連自己的網域。
 // 只轉送代號，不含股數或金額；代號格式先驗證，不當成任意網址的代理。
@@ -21,6 +22,8 @@ const TW_RE = /^\d{4,6}[A-Z]?$/;
 const US_RE = /^[A-Z][A-Z0-9]{0,6}([.-][A-Z]{1,2})?$/;
 export const MAX_SYMBOLS = 60;
 
+const misUrl = (codes: string[]) =>
+  `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${codes.flatMap((c) => [`tse_${c}.tw`, `otc_${c}.tw`]).join('|')}&json=1&delay=0`;
 const TWSE_URL = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL';
 const TPEX_URL = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes';
 const yahooUrl = (sym: string) => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=5d&interval=1d`;
@@ -46,6 +49,21 @@ export function parseTwClose(rows: unknown, codes: Set<string>, fields: { code: 
     const date = rocDate(r.Date);
     if (price && date) out.quotes[code] = { price, date, source };
     else out.errors[code] = `${source}當日沒有成交價`;
+  }
+}
+
+// 即時行情：z 是最近成交價（盤前、收盤集合競價時是 "-"），d 是交易日 YYYYMMDD，t 是時間
+export function parseMis(json: unknown, codes: Set<string>, out: QuotesResponse) {
+  const rows = (json as { msgArray?: Record<string, unknown>[] })?.msgArray;
+  if (!Array.isArray(rows)) return;
+  for (const r of rows) {
+    const code = String(r.c ?? '');
+    const price = num(r.z);
+    const m = String(r.d ?? '').match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (!codes.has(code) || !price || !m || out.quotes[code]) continue;
+    const date = `${m[1]}-${m[2]}-${m[3]}`;
+    const time = /^\d{2}:\d{2}:\d{2}$/.test(String(r.t)) ? `${date}T${r.t}+08:00` : undefined;
+    out.quotes[code] = { price, date, source: '證交所即時', ...(time ? { time: new Date(time).toISOString() } : {}) };
   }
 }
 
@@ -82,7 +100,13 @@ export async function getQuotes(us: string[], tw: string[], fetchFn: FetchFn, in
 
   const twTask = (async () => {
     if (!twOk.length) return;
-    const codes = new Set(twOk);
+    try {
+      parseMis(await getJson(fetchFn, misUrl(twOk), init), new Set(twOk), out);
+    } catch {
+      // 即時行情連不上：改用每日收盤
+    }
+    const codes = new Set(twOk.filter((c) => !out.quotes[c]));
+    if (!codes.size) return;
     try {
       parseTwClose(await getJson(fetchFn, TWSE_URL, init), codes, { code: 'Code', close: 'ClosingPrice' }, '證交所', out);
     } catch (e) {

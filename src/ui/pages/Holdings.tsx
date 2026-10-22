@@ -5,6 +5,7 @@ import { Card, Gain, Notice, Seg } from '../components';
 import { brokerCostName, costHint, costTerms, schwabHolds } from '../costTerms';
 import { holdingsCsv, holdingsMarkdown } from '../exportHoldings';
 import type { QuotesApi } from '../../quotes/useQuotes';
+import type { Analytics } from '../../perf/useAnalytics';
 import { QuotesButton, quotesStatus } from '../QuotesBar';
 import { money, moneyIn, pct, qty, today } from '../format';
 
@@ -36,6 +37,21 @@ const ratio = (a: number, b: number) => (b > 0 ? a / b : -Infinity);
 
 // 欄位順序與顯示：每台裝置各自記住（和外觀設定一樣，不同步）。代號固定在最前面。
 const PREF_KEY = 'holdingsColumns';
+const NAME_KEY = 'holdingsShowName';
+function readLocal(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeLocal(key: string, v: string) {
+  try {
+    localStorage.setItem(key, v);
+  } catch {
+    // 無痕模式等情況存不了：只影響下次開啟
+  }
+}
 interface ColPref {
   order: string[];
   hidden: string[];
@@ -63,12 +79,15 @@ function arrange(cols: Col[], order: string[]): Col[] {
   return [first, ...known, ...rest.filter((c) => !order.includes(c.key))];
 }
 
-export function Holdings({ report: r, quotes }: PageProps & { quotes?: QuotesApi }) {
+export function Holdings({ report: r, quotes, analytics }: PageProps & { quotes?: QuotesApi; analytics?: Analytics }) {
   const [view, setView] = useState<View>('all');
   const [sort, setSort] = useState<{ key: string; dir: Dir }>({ key: 'marketValue', dir: 'desc' });
   const [msg, setMsg] = useState<string[]>([]);
   const [pref, setPrefState] = useState<ColPref>(loadPref);
   const [picking, setPicking] = useState(false);
+  const [showName, setShowNameState] = useState(() => readLocal(NAME_KEY) !== '0');
+  const setShowName = (on: boolean) => (setShowNameState(on), writeLocal(NAME_KEY, on ? '1' : '0'));
+  const betas = analytics?.beta?.bySymbol ?? {};
   const setPref = (p: ColPref) => (setPrefState(p), savePref(p));
   const t = r.totals;
   const holds = schwabHolds(r.holdings);
@@ -84,9 +103,11 @@ export function Holdings({ report: r, quotes }: PageProps & { quotes?: QuotesApi
       cell: (h) => (
         <>
           <strong>{h.symbol}</strong>
-          <div className="muted" style={{ fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {h.name}
-          </div>
+          {showName && (
+            <div className="muted" style={{ fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {h.name}
+            </div>
+          )}
         </>
       ),
       foot: '合計',
@@ -97,6 +118,14 @@ export function Holdings({ report: r, quotes }: PageProps & { quotes?: QuotesApi
     { key: 'price', label: '現價', hint: '最近一次匯入或輸入的價格（原幣）；滑過價格看日期', sortValue: (h) => (h.price ?? -Infinity) / (h.currency === 'TWD' ? (r.fx?.rate ?? 1) : 1), cell: (h) => (h.price != null ? moneyIn(h.price, h.currency) : '—') },
     { key: 'marketValue', label: '市值', sortValue: (h) => h.marketValue, cell: (h) => money(h.marketValue), foot: money(t.marketValue) },
     { key: 'weight', label: '比重', sortValue: (h) => h.weight, cell: (h) => pct(h.weight, 1), foot: '100%' },
+    {
+      key: 'beta',
+      label: 'Beta',
+      hint: '相對 S&P 500 的 Beta：近 5 年月報酬（含息）；有美股 ADR 的台股用 ADR（2330 用 TSM），其他台股換成美元計算。合計＝依市值加權（現金以 0 計）',
+      sortValue: (h) => betas[h.symbol] ?? -Infinity,
+      cell: (h) => (betas[h.symbol] != null ? betas[h.symbol].toFixed(2) : '—'),
+      foot: analytics?.beta?.portfolio != null ? analytics.beta.portfolio.toFixed(2) : '',
+    },
     // 券商帳上的成本；Schwab 清空後只剩永豐
     ...(holds
       ? ([
@@ -220,6 +249,10 @@ export function Holdings({ report: r, quotes }: PageProps & { quotes?: QuotesApi
       {picking && (
         <div className="colpicker">
           <p className="desc">用 ↑ ↓ 調整順序、取消勾選隱藏欄位；只記在這台裝置。代號固定在最前面。</p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, margin: '6px 0' }}>
+            <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} />
+            代號下方顯示公司名稱（取消後代號欄會變窄）
+          </label>
           <ol>
             {ordered.slice(1).map((c, i, all) => (
               <li key={c.key}>

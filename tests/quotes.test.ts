@@ -6,6 +6,9 @@ const TWSE = [
   { Date: '1151021', Code: '2330', Name: '台積電', ClosingPrice: '2,420.00' },
   { Date: '1151021', Code: '0050', Name: '元大台灣50', ClosingPrice: '--' },
 ];
+// 證交所即時行情：收盤集合競價時沒有成交價（z 為 "-"）
+const MIS_AUCTION = { msgArray: [{ c: '2330', z: '-', y: '2420.0000', d: '20261022', t: '13:28:09' }], rtcode: '0000' };
+const MIS_TRADING = { msgArray: [{ c: '2330', z: '2395.0000', y: '2420.0000', d: '20261022', t: '11:05:30' }, { c: '006208', z: '245.10', d: '20261022', t: '11:05:30' }], rtcode: '0000' };
 const TPEX = [{ Date: '1151021', SecuritiesCompanyCode: '00679B', CompanyName: '元大美債20年', Close: '25.77' }];
 const yahoo = (price: number, epoch: number, tz = 'America/New_York') => ({ chart: { result: [{ meta: { regularMarketPrice: price, regularMarketTime: epoch, exchangeTimezoneName: tz } }] } });
 // 2026-10-21 16:00 美東 = 2026-10-22 04:00 台灣：日期要算成美國的 10/21
@@ -13,11 +16,12 @@ const CLOSE_1021_ET = Date.UTC(2026, 9, 21, 20, 0) / 1000;
 
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
 
-function upstream(overrides: Partial<Record<'twse' | 'tpex' | 'yahoo', () => Promise<Response>>> = {}) {
+function upstream(overrides: Partial<Record<'mis' | 'twse' | 'tpex' | 'yahoo', () => Promise<Response>>> = {}) {
   const calls: string[] = [];
   const fn = (url: string) => {
     calls.push(url);
-    if (url.includes('twse')) return overrides.twse?.() ?? json(TWSE);
+    if (url.includes('mis.twse')) return overrides.mis?.() ?? json(MIS_AUCTION);
+    if (url.includes('openapi.twse')) return overrides.twse?.() ?? json(TWSE);
     if (url.includes('tpex')) return overrides.tpex?.() ?? json(TPEX);
     if (url.includes('/BRK-B?')) return overrides.yahoo?.() ?? json(yahoo(538.99, CLOSE_1021_ET));
     if (url.includes('/AAPL?')) return overrides.yahoo?.() ?? json(yahoo(340.1, CLOSE_1021_ET));
@@ -46,8 +50,23 @@ describe('報價中繼', () => {
     expect(r.quotes['0050']).toBeUndefined();
     expect(r.errors['0050']).toContain('沒有成交價');
     expect(r.errors['9999']).toContain('查不到');
-    expect(calls.filter((u) => u.includes('twse'))).toHaveLength(1);
+    expect(calls.filter((u) => u.includes('openapi.twse'))).toHaveLength(1);
     expect(calls.some((u) => u.includes('BRK-B'))).toBe(true);
+  });
+
+  it('盤中用證交所即時成交價；即時行情都有價格時不再查每日收盤', async () => {
+    const { fn, calls } = upstream({ mis: () => json(MIS_TRADING) });
+    const r = await getQuotes([], ['2330', '006208'], fn);
+    expect(r.quotes['2330']).toEqual({ price: 2395, date: '2026-10-22', source: '證交所即時', time: '2026-10-22T03:05:30.000Z' });
+    expect(r.quotes['006208']?.price).toBe(245.1);
+    expect(calls.some((u) => u.includes('openapi.twse'))).toBe(false);
+    expect(calls.find((u) => u.includes('mis.twse'))).toContain('tse_2330.tw|otc_2330.tw');
+  });
+
+  it('即時行情連不上（例如擋掉 Cloudflare）時，照樣用每日收盤', async () => {
+    const { fn } = upstream({ mis: () => Promise.reject(new TypeError('blocked')) });
+    const r = await getQuotes([], ['2330'], fn);
+    expect(r.quotes['2330']).toEqual({ price: 2420, date: '2026-10-21', source: '證交所' });
   });
 
   it('櫃買中心擋掉時（Cloudflare 實測會被擋），台股改查 Yahoo 的 .TW／.TWO', async () => {
