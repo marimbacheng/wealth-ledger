@@ -1,10 +1,13 @@
-// Cloudflare Workers 靜態網站設定：只放 dist/ 的靜態檔，不跑任何伺服器程式。
-// 安全標頭在 public/_headers（建置後會在 dist/_headers）。
+// Cloudflare Workers 設定：dist/ 的靜態檔，加上 /api/quotes 報價中繼（worker/index.ts）。
+// 只有 /api/* 會先進 Worker，其他請求直接回靜態檔；安全標頭在 public/_headers（建置後在 dist/_headers）。
 {
   "name": "wealth-ledger",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
   }
 }

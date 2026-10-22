@@ -4,6 +4,8 @@ import type { HoldingRow } from '../../engine/report';
 import { Card, Gain, Notice, Seg } from '../components';
 import { brokerCostName, costHint, costTerms, schwabHolds } from '../costTerms';
 import { holdingsCsv, holdingsMarkdown } from '../exportHoldings';
+import type { QuotesApi } from '../../quotes/useQuotes';
+import { QuotesButton, quotesStatus } from '../QuotesBar';
 import { money, moneyIn, pct, qty, today } from '../format';
 
 type View = 'all' | 'broker' | 'cont';
@@ -61,7 +63,7 @@ function arrange(cols: Col[], order: string[]): Col[] {
   return [first, ...known, ...rest.filter((c) => !order.includes(c.key))];
 }
 
-export function Holdings({ report: r }: PageProps) {
+export function Holdings({ report: r, quotes }: PageProps & { quotes?: QuotesApi }) {
   const [view, setView] = useState<View>('all');
   const [sort, setSort] = useState<{ key: string; dir: Dir }>({ key: 'marketValue', dir: 'desc' });
   const [msg, setMsg] = useState<string[]>([]);
@@ -205,6 +207,7 @@ export function Holdings({ report: r }: PageProps) {
           ]}
         />
         <div className="row">
+          {quotes && <QuotesButton quotes={quotes} />}
           <button onClick={() => setPicking((x) => !x)} aria-expanded={picking}>
             {picking ? '完成' : '調整欄位'}
           </button>
@@ -242,6 +245,7 @@ export function Holdings({ report: r }: PageProps) {
           <button onClick={() => setPref({ order: [], hidden: [] })}>恢復預設</button>
         </div>
       )}
+      {quotes && <p className="desc" style={{ margin: '0 0 8px' }}>{quotesStatus(quotes)}</p>}
       <Notice items={msg} />
       <div className="table-wrap">
         <table>

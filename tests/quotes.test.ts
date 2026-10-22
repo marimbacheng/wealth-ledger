@@ -1,0 +1,102 @@
+import { applyQuotes, validQuotes } from '../src/quotes/quotes';
+import { getQuotes, handleQuotes, parseYahoo, rocDate, yahooSymbol } from '../worker/quotes';
+
+// 合成的上游回應：格式照證交所、櫃買中心 OpenAPI 與 Yahoo chart 的實際欄位
+const TWSE = [
+  { Date: '1151021', Code: '2330', Name: '台積電', ClosingPrice: '2,420.00' },
+  { Date: '1151021', Code: '0050', Name: '元大台灣50', ClosingPrice: '--' },
+];
+const TPEX = [{ Date: '1151021', SecuritiesCompanyCode: '00679B', CompanyName: '元大美債20年', Close: '25.77' }];
+const yahoo = (price: number, epoch: number, tz = 'America/New_York') => ({ chart: { result: [{ meta: { regularMarketPrice: price, regularMarketTime: epoch, exchangeTimezoneName: tz } }] } });
+// 2026-10-21 16:00 美東 = 2026-10-22 04:00 台灣：日期要算成美國的 10/21
+const CLOSE_1021_ET = Date.UTC(2026, 9, 21, 20, 0) / 1000;
+
+const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }));
+
+function upstream(overrides: Partial<Record<'twse' | 'tpex' | 'yahoo', () => Promise<Response>>> = {}) {
+  const calls: string[] = [];
+  const fn = (url: string) => {
+    calls.push(url);
+    if (url.includes('twse')) return overrides.twse?.() ?? json(TWSE);
+    if (url.includes('tpex')) return overrides.tpex?.() ?? json(TPEX);
+    if (url.includes('BRK-B')) return overrides.yahoo?.() ?? json(yahoo(538.99, CLOSE_1021_ET));
+    if (url.includes('yahoo')) return overrides.yahoo?.() ?? json(yahoo(340.1, CLOSE_1021_ET));
+    return json({}, 404);
+  };
+  return { fn, calls };
+}
+
+describe('報價中繼', () => {
+  it('民國日期、Yahoo 代號、交易所當地日期', () => {
+    expect(rocDate('1151021')).toBe('2026-10-21');
+    expect(rocDate('991231')).toBe('2010-12-31');
+    expect(yahooSymbol('BRK.B')).toBe('BRK-B');
+    expect(parseYahoo(yahoo(340.1, CLOSE_1021_ET))).toMatchObject({ price: 340.1, date: '2026-10-21', source: 'Yahoo' });
+    expect(parseYahoo({ chart: { result: [] } })).toBeUndefined();
+  });
+
+  it('台股先查證交所，查不到再查櫃買中心；美股查 Yahoo；當日沒成交的不給價格', async () => {
+    const { fn, calls } = upstream();
+    const r = await getQuotes(['AAPL', 'BRK.B'], ['2330', '00679B', '0050', '9999'], fn);
+    expect(r.quotes['2330']).toEqual({ price: 2420, date: '2026-10-21', source: '證交所' });
+    expect(r.quotes['00679B']).toEqual({ price: 25.77, date: '2026-10-21', source: '櫃買中心' });
+    expect(r.quotes.AAPL).toMatchObject({ price: 340.1, date: '2026-10-21', source: 'Yahoo' });
+    expect(r.quotes['BRK.B']?.price).toBe(538.99);
+    expect(r.quotes['0050']).toBeUndefined();
+    expect(r.errors['0050']).toContain('沒有成交價');
+    expect(r.errors['9999']).toContain('查不到');
+    expect(calls.filter((u) => u.includes('twse'))).toHaveLength(1);
+    expect(calls.some((u) => u.includes('BRK-B'))).toBe(true);
+  });
+
+  it('上游失敗只影響那幾檔，不會整批失敗', async () => {
+    const { fn } = upstream({ twse: () => json({}, 503), yahoo: () => Promise.reject(new TypeError('blocked')) });
+    const r = await getQuotes(['AAPL'], ['2330', '00679B'], fn);
+    expect(r.quotes['00679B']?.price).toBe(25.77);
+    expect(r.errors['2330']).toBeDefined();
+    expect(r.errors.AAPL).toContain('Yahoo');
+  });
+
+  it('只接受 GET、代號要合格、數量有上限；不合格的代號不送到上游', async () => {
+    const { fn, calls } = upstream();
+    expect((await handleQuotes(new Request('http://x/api/quotes?us=AAPL', { method: 'POST' }), fn)).status).toBe(405);
+    expect((await handleQuotes(new Request('http://x/api/quotes'), fn)).status).toBe(400);
+    const many = Array.from({ length: 61 }, (_, i) => `A${i}`).join(',');
+    expect((await handleQuotes(new Request(`http://x/api/quotes?us=${many}`), fn)).status).toBe(400);
+    const r = await handleQuotes(new Request('http://x/api/quotes?us=aapl,../../etc&tw=2330'), fn);
+    const body = (await r.json()) as { quotes: Record<string, unknown>; errors: Record<string, string> };
+    expect(Object.keys(body.quotes).sort()).toEqual(['2330', 'AAPL']);
+    expect(body.errors['../../ETC']).toBe('代號格式不正確');
+    expect(calls.every((u) => !u.includes('etc'))).toBe(true);
+  });
+});
+
+describe('前端套用報價', () => {
+  it('回應先驗證：價格不是正數或日期格式不對的丟掉', () => {
+    const v = validQuotes({ quotes: { A: { price: 1, date: '2026-10-21', source: 'Yahoo' }, B: { price: -1, date: '2026-10-21', source: 'x' }, C: { price: 2, date: '10/21', source: 'x' } }, errors: { D: 'x' } });
+    expect(Object.keys(v!.quotes)).toEqual(['A']);
+    expect(v!.errors).toEqual({ D: 'x' });
+    expect(validQuotes('nope')).toBeNull();
+  });
+
+  it('較新的日期才取代；同一天不蓋掉手動輸入；較舊的報價不取代較新的價格', () => {
+    const prices = {
+      A: { price: 10, date: '2026-10-20', source: '永豐 持倉' },
+      B: { price: 20, date: '2026-10-21', source: '手動' },
+      C: { price: 30, date: '2026-10-23', source: '手動' },
+      D: { price: 40, date: '2026-10-21', source: 'Yahoo' },
+    };
+    const { prices: next, updated } = applyQuotes(prices, {
+      A: { price: 11, date: '2026-10-21', source: 'Yahoo' },
+      B: { price: 21, date: '2026-10-21', source: 'Yahoo' },
+      C: { price: 31, date: '2026-10-21', source: 'Yahoo' },
+      D: { price: 41, date: '2026-10-21', source: 'Yahoo' },
+      E: { price: 50, date: '2026-10-21', source: '證交所' },
+    });
+    expect(updated.sort()).toEqual(['A', 'D', 'E']);
+    expect(next.A).toEqual({ price: 11, date: '2026-10-21', source: 'Yahoo' });
+    expect(next.B.price).toBe(20);
+    expect(next.C.price).toBe(30);
+    expect(next.D.price).toBe(41);
+  });
+});

@@ -8,7 +8,9 @@ import type { SyncApi } from '../../sync/useSync';
 import { Card, Notice } from '../components';
 import { SyncCard } from '../SyncCard';
 import { FxCard } from '../FxCard';
+import { QuotesCard } from '../QuotesBar';
 import type { FxApi } from '../../fx/useFx';
+import type { QuotesApi } from '../../quotes/useQuotes';
 import { money, today } from '../format';
 
 function download(name: string, text: string, type: string) {
@@ -32,7 +34,7 @@ const TXN_EXAMPLE = [
 const VALUE_EXAMPLE = [VALUE_HEADER.join(','), '2024-05-31,20000.00,5 月對帳單 Ending Account Value', '2024-06-30,20500.00,'].join('\n');
 const POS_EXAMPLE = [TW_POS_HEADER.join(','), '2026-11-30,VOO,VANGUARD S&P 500 ETF,10,5003.00,510.00,', '2026-11-30,KO,COCA-COLA,30,2103.00,72.00,'].join('\n');
 
-export function Setup({ store, report: r, update, importFiles, sync, fx }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]>; sync: SyncApi; fx: FxApi }) {
+export function Setup({ store, report: r, update, importFiles, sync, fx, quotes }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]>; sync: SyncApi; fx: FxApi; quotes: QuotesApi }) {
   const [results, setResults] = useState<ImportResult[]>([]);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -154,6 +156,7 @@ export function Setup({ store, report: r, update, importFiles, sync, fx }: PageP
       </div>
 
       <div className="section">
+        <QuotesCard quotes={quotes} />
         <FxCard store={store} update={update} fx={fx} />
       </div>
 

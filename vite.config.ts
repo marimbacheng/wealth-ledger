@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
 import { createFakeGithub } from './dev/fakeGithub';
+import { handleQuotes } from './worker/quotes';
 
 // 只在開發伺服器啟用：/__fake-github 模擬 GitHub Contents API，用來在瀏覽器裡測試兩台裝置同步
 function fakeGithub(): Plugin {
@@ -25,6 +26,23 @@ function fakeGithub(): Plugin {
   };
 }
 
+// 開發伺服器也提供 /api/quotes（正式環境由 Cloudflare Worker 提供），用同一份程式
+function quotesApi(): Plugin {
+  return {
+    name: 'quotes-api',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/api/quotes', (req, res) => {
+        void handleQuotes(new Request(`http://localhost${req.originalUrl ?? req.url ?? ''}`, { method: req.method }), (url, init) => fetch(url, init)).then(async (r) => {
+          res.statusCode = r.status;
+          r.headers.forEach((v, k) => res.setHeader(k, v));
+          res.end(await r.text());
+        });
+      });
+    },
+  };
+}
+
 // 正式建置時在 HTML 加上內容安全政策：只能載入自己的程式、只能連到 GitHub API，
 // 就算哪天混進惡意腳本，也拿不走 token 或把資料送到別處。開發模式不加（HMR 需要 inline script）。
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://api.github.com https://cdn.jsdelivr.net https://*.currency-api.pages.dev; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'".replace(/; frame-ancestors 'none'/, '');
@@ -40,7 +58,7 @@ function cspMeta(): Plugin {
 // 部署在網域根目錄（Cloudflare Workers）；BASE_PATH 只在需要掛在子路徑時才設定。
 export default defineConfig({
   base: process.env.BASE_PATH ?? '/',
-  plugins: [react(), fakeGithub(), cspMeta()],
+  plugins: [react(), fakeGithub(), quotesApi(), cspMeta()],
   test: {
     globals: true,
     environment: 'node',
