@@ -30,7 +30,7 @@ export function QuotesCard({ quotes }: { quotes: QuotesApi }) {
   return (
     <Card
       title="報價"
-      desc="台股用證交所（上市）與櫃買中心（上櫃）公布的每日收盤價，美股用 Yahoo 的報價（盤中約延遲幾分鐘、收盤後為收盤價）。透過本站的 Cloudflare 轉送，只送出代號，不含股數與金額。同一天手動輸入的價格不會被蓋掉。"
+      desc="台股用證交所（上市）與櫃買中心（上櫃）公布的每日收盤價（查不到時改用 Yahoo），美股用 Yahoo 的報價（盤中約延遲幾分鐘、收盤後為收盤價）。透過本站的 Cloudflare 轉送，只送出代號，不含股數與金額。同一天手動輸入的價格不會被蓋掉。"
     >
       <div className="row">
         <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

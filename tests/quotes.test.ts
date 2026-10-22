@@ -19,9 +19,10 @@ function upstream(overrides: Partial<Record<'twse' | 'tpex' | 'yahoo', () => Pro
     calls.push(url);
     if (url.includes('twse')) return overrides.twse?.() ?? json(TWSE);
     if (url.includes('tpex')) return overrides.tpex?.() ?? json(TPEX);
-    if (url.includes('BRK-B')) return overrides.yahoo?.() ?? json(yahoo(538.99, CLOSE_1021_ET));
-    if (url.includes('yahoo')) return overrides.yahoo?.() ?? json(yahoo(340.1, CLOSE_1021_ET));
-    return json({}, 404);
+    if (url.includes('/BRK-B?')) return overrides.yahoo?.() ?? json(yahoo(538.99, CLOSE_1021_ET));
+    if (url.includes('/AAPL?')) return overrides.yahoo?.() ?? json(yahoo(340.1, CLOSE_1021_ET));
+    if (url.includes('/00679B.TWO?')) return json(yahoo(26, Date.UTC(2026, 9, 22, 5, 0) / 1000, 'Asia/Taipei'));
+    return json({ chart: { result: null, error: { code: 'Not Found' } } }, 404);
   };
   return { fn, calls };
 }
@@ -47,6 +48,16 @@ describe('報價中繼', () => {
     expect(r.errors['9999']).toContain('查不到');
     expect(calls.filter((u) => u.includes('twse'))).toHaveLength(1);
     expect(calls.some((u) => u.includes('BRK-B'))).toBe(true);
+  });
+
+  it('櫃買中心擋掉時（Cloudflare 實測會被擋），台股改查 Yahoo 的 .TW／.TWO', async () => {
+    const { fn, calls } = upstream({ tpex: () => Promise.reject(new TypeError('Too many redirects')) });
+    const r = await getQuotes([], ['2330', '00679B', '9999'], fn);
+    expect(r.quotes['2330']?.source).toBe('證交所');
+    expect(r.quotes['00679B']).toMatchObject({ price: 26, date: '2026-10-22', source: 'Yahoo' });
+    expect(r.errors['00679B']).toBeUndefined();
+    expect(r.errors['9999']).toBeDefined();
+    expect(calls.some((u) => u.includes('/2330.TW'))).toBe(false); // 官方有的就不再查 Yahoo
   });
 
   it('上游失敗只影響那幾檔，不會整批失敗', async () => {

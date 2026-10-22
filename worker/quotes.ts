@@ -1,4 +1,5 @@
 // 報價中繼：台股用證交所（上市）與櫃買中心（上櫃）的官方 OpenAPI 每日收盤，美股用 Yahoo 的 chart 介面（非官方）。
+// 官方來源查不到（例如櫃買中心擋掉 Cloudflare 的連線，2026-10-22 實測）時，台股改查 Yahoo 的 .TW／.TWO。
 // 這些來源都沒有開放瀏覽器跨網域呼叫，所以由 Cloudflare Worker（開發時由 Vite）轉送；前端只連自己的網域。
 // 只轉送代號，不含股數或金額；代號格式先驗證，不當成任意網址的代理。
 
@@ -99,9 +100,11 @@ export async function getQuotes(us: string[], tw: string[], fetchFn: FetchFn, in
     }
   })();
 
+  const yahooQuote = async (sym: string) => parseYahoo(await getJson(fetchFn, yahooUrl(sym), { ...init, headers: { 'User-Agent': 'Mozilla/5.0' } }));
+
   const usTasks = usOk.map(async (s) => {
     try {
-      const q = parseYahoo(await getJson(fetchFn, yahooUrl(yahooSymbol(s)), { ...init, headers: { 'User-Agent': 'Mozilla/5.0' } }));
+      const q = await yahooQuote(yahooSymbol(s));
       if (q) out.quotes[s] = q;
       else out.errors[s] = 'Yahoo 沒有回傳價格';
     } catch (e) {
@@ -109,7 +112,29 @@ export async function getQuotes(us: string[], tw: string[], fetchFn: FetchFn, in
     }
   });
 
-  await Promise.all([twTask, ...usTasks]);
+  // 官方來源沒給價格的台股：依序試 Yahoo 的上市（.TW）與上櫃（.TWO）代號
+  const twFallback = twTask.then(() =>
+    Promise.all(
+      twOk
+        .filter((c) => !out.quotes[c])
+        .map(async (c) => {
+          for (const suffix of ['.TW', '.TWO']) {
+            try {
+              const q = await yahooQuote(c + suffix);
+              if (q) {
+                out.quotes[c] = q;
+                delete out.errors[c];
+                return;
+              }
+            } catch {
+              // 這個字尾沒有，試下一個
+            }
+          }
+        }),
+    ),
+  );
+
+  await Promise.all([twFallback, ...usTasks]);
   return out;
 }
 
