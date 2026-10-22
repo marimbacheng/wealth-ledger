@@ -208,7 +208,7 @@ export default function App() {
           {tab === 'dividends' && <Dividends {...props} />}
           {tab === 'ledger' && <Ledger {...props} />}
           {tab === 'migration' && <Migration {...props} />}
-          {tab === 'setup' && <Setup {...props} importFiles={importFiles} sync={sync} fx={fx} quotes={quotes} />}
+          {tab === 'setup' && <Setup {...props} importFiles={importFiles} sync={sync} fx={fx} quotes={quotes} analytics={analytics} />}
         </>
       )}
       <div className="footer">資料只儲存在這台裝置的瀏覽器（localStorage），不會上傳。換裝置或清除瀏覽資料前請下載備份。</div>

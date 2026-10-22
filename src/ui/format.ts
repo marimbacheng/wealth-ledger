@@ -60,6 +60,20 @@ export function niceAxis(min: number, max: number): { domain: [number, number]; 
   return { domain: [lo / r, hi / r], ticks };
 }
 
+// 一年內的時間軸：每月 1 日一個刻度；範圍很短時每兩週一個
+export function monthTicks(min: number, max: number): number[] {
+  const out: number[] = [];
+  const d = new Date(min);
+  for (let y = d.getUTCFullYear(), m = d.getUTCMonth() + 1; Date.UTC(y, m, 1) <= max; m++) {
+    if (m > 11) {
+      y += Math.floor(m / 12);
+      m %= 12;
+    }
+    out.push(Date.UTC(y, m, 1));
+  }
+  return out.length >= 2 ? out : [min, max];
+}
+
 // 時間軸以年為單位：每年 1 月 1 日一個刻度；範圍內沒有跨年時，只在起點標年份
 export function yearTicks(min: number, max: number): number[] {
   const ticks: number[] = [];

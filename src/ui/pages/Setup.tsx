@@ -11,6 +11,7 @@ import { FxCard } from '../FxCard';
 import { QuotesCard } from '../QuotesBar';
 import type { FxApi } from '../../fx/useFx';
 import type { QuotesApi } from '../../quotes/useQuotes';
+import type { Analytics } from '../../perf/useAnalytics';
 import { money, today } from '../format';
 
 function download(name: string, text: string, type: string) {
@@ -34,7 +35,7 @@ const TXN_EXAMPLE = [
 const VALUE_EXAMPLE = [VALUE_HEADER.join(','), '2024-05-31,20000.00,5 月對帳單 Ending Account Value', '2024-06-30,20500.00,'].join('\n');
 const POS_EXAMPLE = [TW_POS_HEADER.join(','), '2026-11-30,VOO,VANGUARD S&P 500 ETF,10,5003.00,510.00,', '2026-11-30,KO,COCA-COLA,30,2103.00,72.00,'].join('\n');
 
-export function Setup({ store, report: r, update, importFiles, sync, fx, quotes }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]>; sync: SyncApi; fx: FxApi; quotes: QuotesApi }) {
+export function Setup({ store, report: r, update, importFiles, sync, fx, quotes, analytics }: PageProps & { importFiles: (f: File[]) => Promise<ImportResult[]>; sync: SyncApi; fx: FxApi; quotes: QuotesApi; analytics?: Analytics }) {
   const [results, setResults] = useState<ImportResult[]>([]);
   const [over, setOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -187,6 +188,24 @@ export function Setup({ store, report: r, update, importFiles, sync, fx, quotes 
         </Card>
 
         <Card title="報酬起算點與預設值" desc="填一個知道帳戶總值的日期（例如 Schwab 績效報表的 Beginning Value），年化報酬率與「期間賺得」從這天起算。之後的匯入款從交易紀錄自動加上；期初持股（例如原有台股）以記入當天的市值計入。">
+          {analytics?.perf?.suggest && (
+            <div className="row" style={{ marginBottom: 10, alignItems: 'center' }}>
+              <p className="desc" style={{ margin: 0, flex: '1 1 320px' }}>
+                建議：起算日 {analytics.perf.suggest.date}、帳戶總值 {money(analytics.perf.suggest.value)}。這是交易紀錄最早的一天，總值由交易紀錄與當天收盤價重建（已和 Schwab 對帳資料核對，見總覽「年度表現」的對帳明細）。
+                {analytics.perf.suggest.xirr != null && `以這個起點算出的年化報酬率約 ${(analytics.perf.suggest.xirr * 100).toFixed(1)}%。`}
+              </p>
+              <button
+                onClick={() =>
+                  update((s) => {
+                    s.settings.openingContribution = { date: analytics.perf!.suggest!.date, amount: Math.round(analytics.perf!.suggest!.value * 100) / 100 };
+                    return s;
+                  })
+                }
+              >
+                套用建議
+              </button>
+            </div>
+          )}
           <div className="row">
             <label className="field">
               起算日

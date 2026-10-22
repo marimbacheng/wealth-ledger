@@ -1,5 +1,5 @@
 import { emptyStore, type Store, type Txn } from '../src/domain/types';
-import { betaSource, checks, dailyValues, monthlyBeta, periodStats, SPX, twrIndex, unadjusted, yearlyRows, type History, type PriceSeries } from '../src/engine/performance';
+import { betaSource, checks, dailyValues, dataStart, events, monthlyBeta, periodStats, SPX, twrIndex, unadjusted, yearlyRows, type History, type PriceSeries } from '../src/engine/performance';
 import { handleHistory, parseChart } from '../worker/history';
 
 let seq = 0;
@@ -134,5 +134,51 @@ describe('Beta', () => {
     expect(betaSource(s, '2330')).toEqual({ symbol: 'TSM', fx: false });
     expect(betaSource(s, '006208')).toEqual({ symbol: '006208', fx: true });
     expect(betaSource(s, 'AAPL')).toEqual({ symbol: 'AAPL', fx: false });
+  });
+});
+
+describe('資料起點、分拆、事件', () => {
+  function base(): Store {
+    const s = emptyStore();
+    s.snapshots.push({ id: 'schwab|2026-10-19', broker: 'schwab', date: '2026-10-19', cash: 0, total: 0, source: 't', rows: [{ symbol: 'MMM', name: 'MMM', qty: 8, price: 130, costBasis: 0, marketValue: 0 }] });
+    return s;
+  }
+
+  it('交易紀錄的涵蓋區間相接（含週末間隔）就往前合併，取到最早的連續起點', () => {
+    const s = base();
+    s.coverage = [
+      { broker: 'schwab', kind: 'transactions', from: '2026-04-15', to: '2026-10-19' },
+      { broker: 'schwab', kind: 'transactions', from: '2024-01-02', to: '2026-04-13' }, // 4/13 週一 → 4/15 相接
+      { broker: 'schwab', kind: 'transactions', from: '2021-01-04', to: '2022-06-30' }, // 中間斷了一年多：不算
+      { broker: 'schwab', kind: 'income', from: '2020-01-01', to: '2026-10-19' }, // 股利檔不算交易紀錄
+    ];
+    expect(dataStart(s)).toBe('2024-01-02');
+    expect(dataStart(emptyStore())).toBeUndefined();
+  });
+
+  it('分拆配股在分拆日才出現新公司的股數（往回推時，分拆前沒有）', () => {
+    const s = base();
+    s.snapshots[0].rows.push({ symbol: 'SOLV', name: 'SOLV', qty: 2, price: 70, costBasis: 0, marketValue: 0 });
+    s.txns = [tx({ broker: 'schwab', date: '2024-04-01', type: 'OTHER', symbol: 'SOLV.WI', qty: 2, amount: 0, note: '分拆配股' })];
+    const hist: History = {
+      MMM: series([['2024-03-28', 100], ['2024-04-01', 100]]),
+      SOLV: series([['2024-04-01', 70]]),
+      [SPX]: series([['2024-03-28', 5000], ['2024-04-01', 5000]]),
+    };
+    const v = Object.fromEntries(dailyValues(s, hist, '2024-03-28', '2024-04-01').map((p) => [p.date, p.value]));
+    expect(v['2024-03-28']).toBeCloseTo(8 * 100, 6);
+    expect(v['2024-04-01']).toBeCloseTo(8 * 100 + 2 * 70, 6);
+  });
+
+  it('圖上的事件：券商轉換、遷移到永豐', () => {
+    const s = base();
+    s.txns = [
+      tx({ broker: 'schwab', date: '2024-05-13', type: 'OTHER', symbol: 'MMM', qty: 8, amount: 0, note: '券商轉換：證券轉入（TD Ameritrade → Schwab）' }),
+      tx({ broker: 'schwab', date: '2026-10-19', type: 'SELL', symbol: 'MMM', qty: 8, amount: 1040 }),
+    ];
+    expect(events(s)).toEqual([
+      { date: '2024-05-13', label: 'TD Ameritrade → Schwab' },
+      { date: '2026-10-19', label: 'Schwab → 永豐' },
+    ]);
   });
 });

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Store } from '../domain/types';
 import type { Report } from '../engine/report';
-import { betaSource, checks, dailyValues, monthlyBeta, NDX, SPX, twrIndex, USDTWD, yearlyRows, type History, type PriceSeries } from '../engine/performance';
+import { betaSource, checks, dailyValues, dataStart, events, monthlyBeta, NDX, SPX, twrIndex, USDTWD, yearlyRows, type History, type PriceSeries } from '../engine/performance';
+import { xirr } from '../engine/xirr';
 import { pickAnchor } from '../engine/ledger';
 
 // 年度表現與 Beta 需要歷史價格：經本站 /api/history 向 Yahoo 取得，只送代號。
@@ -94,8 +95,8 @@ const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) 
 export function useAnalytics(store: Store, report: Report) {
   const to = report.asOf;
   const anchor = pickAnchor(store);
-  // 起算日：設定的報酬起算點；沒有就用錨點快照
-  const from = report.totalReturn.since ?? anchor?.date;
+  // 起點：交易紀錄連續涵蓋的最早日期（可以完整重建每日總值）；和年化報酬率的「報酬起算點」設定無關
+  const from = dataStart(store) ?? report.totalReturn.since ?? anchor?.date;
 
   const dailySymbols = useMemo(() => {
     if (!from) return [];
@@ -116,13 +117,26 @@ export function useAnalytics(store: Store, report: Report) {
     // 最後一點用報表的目前總值（含今天的報價）
     if (points.length) points[points.length - 1] = { ...points[points.length - 1], value: report.totals.totalValue };
     const idx = twrIndex(points);
-    let contribution = report.totalReturn.since && store.settings.openingContribution ? store.settings.openingContribution.amount : points[0]?.value ?? 0;
+    // 累計投入：起點當天的總值當作已投入，之後加上每筆入金（期初持股以市值計）
+    let contribution = points[0]?.value ?? 0;
     const chart = points.map((p, i) => {
       if (i > 0) contribution += p.flow;
-      return { date: p.date, value: p.value, contribution: report.totalReturn.since ? contribution : undefined };
+      return { date: p.date, value: p.value, contribution };
     });
-    return { years: yearlyRows(idx, hist, from, to), checks: checks(store, points), chart };
-  }, [daily.series, store, from, to, report.totals.totalValue, report.totalReturn.since]);
+    // 建議的報酬起算點：資料起點與當天重建的總值；用它算的年化報酬率供參考
+    const start = points[0];
+    const flows = points.slice(1).filter((p) => p.flow);
+    const suggestXirr = start && points.length > 1 ? xirr([{ date: start.date, amount: -start.value }, ...flows.map((p) => ({ date: p.date, amount: -p.flow })), { date: to, amount: report.totals.totalValue }]) : undefined;
+    const series = (sym: string) => (hist[sym] ? hist[sym].d.map((d, i) => ({ date: d, idx: hist[sym].c[i] })) : []);
+    return {
+      years: yearlyRows(idx, hist, from, to),
+      checks: checks(store, points),
+      chart,
+      events: events(store),
+      index: { portfolio: idx, spx: series(SPX), ndx: series(NDX) },
+      suggest: start ? { date: start.date, value: start.value, xirr: suggestXirr } : undefined,
+    };
+  }, [daily.series, store, from, to, report.totals.totalValue]);
 
   const beta = useMemo(() => {
     const hist = monthly.series;

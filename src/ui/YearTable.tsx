@@ -1,7 +1,25 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import type { PeriodStats, YearRow } from '../engine/performance';
 import type { Analytics } from '../perf/useAnalytics';
+import { YearReturnChart } from './charts';
 import { pct, tone } from './format';
+
+type Pt = { date: string; idx: number };
+// 某一年的累積報酬曲線：以年初（或起算日）為 0%
+function yearSeries(row: YearRow, idx: { portfolio: Pt[]; spx: Pt[]; ndx: Pt[] }) {
+  const at = (xs: Pt[], d: string) => {
+    let v: number | undefined;
+    for (const x of xs) {
+      if (x.date > d) break;
+      v = x.idx;
+    }
+    return v;
+  };
+  const base = { p: at(idx.portfolio, row.from), spx: at(idx.spx, row.from), ndx: at(idx.ndx, row.from) };
+  const rel = (v: number | undefined, b: number | undefined) => (v != null && b ? v / b - 1 : undefined);
+  const days = idx.portfolio.filter((x) => x.date >= row.from && x.date <= row.to);
+  return days.map((x) => ({ date: x.date, p: rel(x.idx, base.p), spx: rel(at(idx.spx, x.date), base.spx), ndx: rel(at(idx.ndx, x.date), base.ndx) }));
+}
 
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
@@ -18,13 +36,24 @@ function Cells({ s }: { s?: PeriodStats }) {
 
 // 每年三列：我的組合、S&P 500、NASDAQ；期間相同，才能比較
 export function YearTable({ a }: { a: Analytics }) {
+  const [pick, setPick] = useState<'all' | number>('all');
   if (!a.from) return <p className="muted">需要先設定報酬起算點，或匯入一份持倉快照。</p>;
   if (!a.perf) return <p className="muted">{a.busy ? '正在取得歷史價格…' : '歷史價格暫時取不到，稍後重新整理再試。'}</p>;
-  const rows: YearRow[] = [...a.perf.years].reverse();
+  const years: YearRow[] = [...a.perf.years].reverse();
+  const rows = pick === 'all' ? years : years.filter((r) => r.year === pick);
+  const one = pick === 'all' ? undefined : rows[0];
   const checks = a.perf.checks;
   const worst = checks.reduce((m, c) => Math.max(m, Math.abs(c.ours / c.official - 1)), 0);
   return (
     <>
+      <div className="seg" role="tablist" style={{ marginBottom: 10, flexWrap: 'wrap' }}>
+        {(['all', ...years.map((r) => r.year)] as const).map((y) => (
+          <button key={y} role="tab" aria-selected={pick === y} className={pick === y ? 'on' : ''} onClick={() => setPick(y)}>
+            {y === 'all' ? '全部' : y}
+          </button>
+        ))}
+      </div>
+      {one && <YearReturnChart data={yearSeries(one, a.perf.index)} />}
       <div className="table-wrap">
         <table>
           <thead>

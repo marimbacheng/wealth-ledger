@@ -90,8 +90,13 @@ interface State {
 }
 const bump = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
 
+// 分拆配股（例如 3M 分出 Solventum）會多出新公司的股數；代號可能帶 .WI（發行前交易）
+const isSpinOff = (t: Txn) => t.type === 'OTHER' && !!t.qty && /SPIN OFF|分拆/i.test(`${t.note ?? ''} ${t.description ?? ''}`);
+
 function applyTxn(st: State, t: Txn, sign: 1 | -1, cur: 'USD' | 'TWD') {
   if (t.symbol && t.qty && (t.type === 'BUY' || t.type === 'OPEN')) bump(st.qty, t.symbol, sign * t.qty);
+  if (t.symbol && isSpinOff(t)) bump(st.qty, t.symbol.replace(/\.WI$/, ''), sign * t.qty!);
+  // 券商轉換的證券轉出／轉入成對出現、股數相同（兩筆都記正數），互相抵銷，所以不處理
   if (t.symbol && t.qty && t.type === 'SELL') bump(st.qty, t.symbol, -sign * t.qty);
   if (CASH_SOURCES.has(t.source) && t.type !== 'OPEN') {
     if (cur === 'TWD') st.twd += sign * t.amount;
@@ -291,4 +296,40 @@ export function betaSource(store: Store, symbol: string): { symbol: string; fx: 
   const adr = (store.settings.migration.mappings ?? []).find((m) => m.to === symbol && currencyOf(m.from, store.securities) === 'USD');
   if (adr) return { symbol: adr.from, fx: false };
   return { symbol, fx: currencyOf(symbol, store.securities) === 'TWD' };
+}
+
+// ---------- 資料起點與事件 ----------
+
+// 交易紀錄連續涵蓋到錨點快照的最早日期：從這天起可以完整重建每日總值。
+// 匯入多份 Schwab 交易紀錄時，涵蓋區間相接（間隔 4 天內，跨週末）就合併。
+export function dataStart(store: Store): string | undefined {
+  const anchor = pickAnchor(store);
+  if (!anchor) return undefined;
+  const iv = store.coverage
+    .filter((c) => c.broker === 'schwab' && c.kind === 'transactions')
+    .map((c) => [c.from, c.to] as const)
+    .sort((a, b) => b[1].localeCompare(a[1]));
+  let start = anchor.date;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [f, t] of iv) {
+      const gap = (Date.parse(start) - Date.parse(t)) / 864e5;
+      if (f < start && gap <= 4) {
+        start = f;
+        changed = true;
+      }
+    }
+  }
+  return start;
+}
+
+// 圖上標記的事件：券商轉換（TD Ameritrade → Schwab）、遷移到永豐（第一筆遷移賣出）
+export function events(store: Store): { date: string; label: string }[] {
+  const out: { date: string; label: string }[] = [];
+  const tda = store.txns.filter((t) => t.broker === 'schwab' && /券商轉換/.test(t.note ?? '')).map((t) => t.date).sort()[0];
+  if (tda) out.push({ date: tda, label: 'TD Ameritrade → Schwab' });
+  const mig = migrationSells(store).map((t) => t.date).sort()[0];
+  if (mig) out.push({ date: mig, label: 'Schwab → 永豐' });
+  return out;
 }

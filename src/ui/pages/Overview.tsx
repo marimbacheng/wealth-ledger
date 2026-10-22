@@ -1,5 +1,5 @@
 import type { PageProps } from '../../App';
-import { DividendYearChart, GradientDonut, ValueChart } from '../charts';
+import { DividendYearChart, GradientDonut, GrowthChart, ValueChart } from '../charts';
 import { HOLDING_RAMP, SECTOR_RAMP } from '../color';
 import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components';
 import { brokerCostName, schwabHolds } from '../costTerms';
@@ -146,8 +146,14 @@ export function Overview({ report: r, store, analytics: a }: PageProps & { analy
         </div>
       </Section>
 
-      <Section no="05" title="資產成長" aside={a?.perf ? '每日收盤重建的帳戶總值' : r.valueSeries.length < 3 ? '資料點還很少；可在「設定」補登過去對帳單的月底總值' : undefined}>
-        {a?.perf?.chart.length ? <ValueChart data={a.perf.chart} /> : r.valueSeries.length > 0 ? <ValueChart data={r.valueSeries} /> : <p className="muted">尚無資產快照</p>}
+      <Section no="05" title="資產成長" aside={a?.perf ? `用每日收盤價與交易紀錄重建，${a.from} 起（交易紀錄最早的日期）` : a?.busy ? '正在取得歷史價格…' : undefined}>
+        {a?.perf?.chart.length ? (
+          <GrowthChart data={a.perf.chart} events={a.perf.events} />
+        ) : r.valueSeries.length > 0 ? (
+          <ValueChart data={r.valueSeries} />
+        ) : (
+          <p className="muted">尚無資產快照</p>
+        )}
       </Section>
 
       <Section no="06" title="年度表現" aside="和 S&P 500、NASDAQ 同期比較">
