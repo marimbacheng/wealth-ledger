@@ -8,8 +8,12 @@ import { mergeBatch } from '../src/store/merge';
 
 // 完整歷史（含 TD Ameritrade 轉入的紀錄）的回歸測試。預期值一律從匯出檔本身算出，不寫死個人數字。
 const ROOT = join(__dirname, '..');
-const DIRS = ['20261015 Schwab 資料', '20261019 Schwab 匯出'].map((d) => join(ROOT, d));
-const has = DIRS.every(existsSync);
+// 遷移賣出前的匯出（資料夾名稱以日期開頭，例如「20261019 Schwab 資料」）；賣出後的匯出另外驗證
+const DIRS = readdirSync(ROOT)
+  .filter((d) => /^\d{8} Schwab/.test(d) && d.slice(0, 8) < '20261020')
+  .sort()
+  .map((d) => join(ROOT, d));
+const has = DIRS.length >= 2 && DIRS.every(existsSync);
 const files = (dir: string) => readdirSync(dir).filter((f) => /\.csv$/i.test(f)).sort();
 const latest = (re: RegExp) => DIRS.flatMap((d) => files(d).filter((f) => re.test(f)).map((f) => join(d, f))).sort().pop()!;
 

@@ -162,6 +162,29 @@ describe('延續帳錨點', () => {
     expect(led.pending[0]).toMatchObject({ symbol: 'AAA', qty: 10, originalCost: 80, proceeds: 100 });
   });
 
+  it('快照當天稍晚才賣出：快照仍有全部股數 → 用當天快照，當天的遷移賣出接在快照之後', () => {
+    const sell = tx({ broker: 'schwab', date: '2026-10-19', type: 'SELL', symbol: 'AAA', qty: 10, amount: 100 });
+    const led = computeLedgers(anchorStore([sell], true), '2026-10-26');
+    expect(led.anchor?.date).toBe('2026-10-19');
+    expect(led.schwab.AAA?.qty ?? 0).toBeCloseTo(0, 6);
+    expect(led.schwabCash).toBeCloseTo(30 + 100, 2);
+    expect(led.pending[0]).toMatchObject({ symbol: 'AAA', qty: 10, originalCost: 80, proceeds: 100 });
+    expect(led.continuous.CCC).toBeUndefined();
+    // Schwab 已實現報表裡的這筆遷移賣出，延續帳不能再算一次已實現（損益已遞延到買回成本）
+    const s = anchorStore([sell], true);
+    s.realized.push({ id: 'r1', broker: 'schwab', symbol: 'AAA', qty: 10, closedDate: '2026-10-19', proceeds: 100, costBasis: 80, gain: 20, source: 't' });
+    const r = buildReport(s, '2026-10-26');
+    expect(r.realized.continuous).toBeCloseTo(0, 6);
+    expect(r.realized.schwabReported).toBeCloseTo(20, 6);
+    expect(r.totalReturn.pendingMigration).toBeCloseTo(20, 6);
+  });
+
+  it('當天快照已經反映賣出（股數不足）→ 不能當錨點，改用前一份', () => {
+    const s = anchorStore([tx({ broker: 'schwab', date: '2026-10-19', type: 'SELL', symbol: 'AAA', qty: 10, amount: 100 })]);
+    s.snapshots = s.snapshots.map((x) => (x.date === '2026-10-19' ? { ...x, rows: [] } : x));
+    expect(computeLedgers(s, '2026-10-26').anchor?.date).toBe('2026-10-15');
+  });
+
   it('Schwab 現金推算為負時提醒重新匯出', () => {
     const s = anchorStore();
     s.snapshots = s.snapshots.filter((x) => x.date === '2026-10-15');

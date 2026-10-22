@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Store } from './domain/types';
 import { buildReport } from './engine/report';
-import { decodeBytes, importText, KIND_LABEL, type ImportKind } from './import';
+import { importBytes, importText, KIND_LABEL, type ImportBatch, type ImportKind } from './import';
 import { mergeBatch } from './store/merge';
 import { loadStore, saveStore } from './store/persist';
 import { setDisplay, today } from './ui/format';
@@ -87,36 +87,34 @@ export default function App() {
   // 匯入要同步回傳結果，所以從 ref 取目前資料、算完再一次 setStore（不能放在 updater 裡，StrictMode 會跑兩次）
   const storeRef = useRef(store);
   storeRef.current = store;
-  const importTexts = useCallback((files: { name: string; text: string }[]): ImportResult[] => {
+  const mergeBatches = useCallback((batches: ImportBatch[]): ImportResult[] => {
     const results: ImportResult[] = [];
     let s = storeRef.current;
-    for (const f of files) {
-      const batch = importText(f.text, f.name);
+    for (const batch of batches) {
       if (batch.kind === 'unknown') {
-        results.push({ file: f.name, kind: batch.kind, label: KIND_LABEL.unknown, added: 0, skipped: 0, warnings: batch.warnings });
+        results.push({ file: batch.file, kind: batch.kind, label: KIND_LABEL.unknown, added: 0, skipped: 0, warnings: batch.warnings });
         continue;
       }
       const r = mergeBatch(s, batch);
       s = r.store;
-      results.push({ file: f.name, kind: batch.kind, label: KIND_LABEL[batch.kind], added: r.added, skipped: r.skipped, warnings: batch.warnings });
+      results.push({ file: batch.file, kind: batch.kind, label: KIND_LABEL[batch.kind], added: r.added, skipped: r.skipped, warnings: [...batch.warnings, ...r.warnings] });
     }
     storeRef.current = s;
     setStore(s);
     return results;
   }, []);
 
+  const importTexts = useCallback((files: { name: string; text: string }[]) => mergeBatches(files.map((f) => importText(f.text, f.name))), [mergeBatches]);
+
   const importFiles = useCallback(
-    async (files: File[]) => {
-      const texts = await Promise.all(files.map(async (f) => ({ name: f.name, text: decodeBytes(await f.arrayBuffer()) })));
-      return importTexts(texts);
-    },
-    [importTexts],
+    async (files: File[]) => mergeBatches(await Promise.all(files.map(async (f) => importBytes(await f.arrayBuffer(), f.name)))),
+    [mergeBatches],
   );
 
   // 開發模式下讓瀏覽器自動化測試可以直接餵檔案
   useEffect(() => {
-    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__ledger = { importTexts, getStore: () => storeRef.current };
-  }, [importTexts]);
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__ledger = { importTexts, importFiles, getStore: () => storeRef.current };
+  }, [importTexts, importFiles]);
 
   const props: PageProps = { store, report, update };
   const empty = store.snapshots.length === 0 && store.txns.length === 0;

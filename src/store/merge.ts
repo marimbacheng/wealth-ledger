@@ -5,6 +5,31 @@ export interface MergeResult {
   store: Store;
   added: number;
   skipped: number;
+  warnings: string[];
+}
+
+const TRADE_LABEL: Record<string, string> = { BUY: '買進', SELL: '賣出', OPEN: '期初持股' };
+
+// 同一筆成交從不同管道進來（範本、手動、券商對帳單），或補了手續費後重新匯入，金額或拆單方式不同就逃過去重。
+// 新加入的買賣若同券商、同日、同代號、同方向已經有紀錄，提醒使用者確認；不自動刪，因為同一天分批買也是正常的。
+function possibleDuplicates(existing: Txn[], added: Txn[]): string[] {
+  const key = (t: Txn) => `${t.broker}|${t.date}|${t.type}|${t.symbol}`;
+  const have = new Map<string, Txn[]>();
+  for (const t of existing) if (TRADE_LABEL[t.type] && t.symbol) have.set(key(t), [...(have.get(key(t)) ?? []), t]);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of added) {
+    const k = key(t);
+    const prev = have.get(k);
+    if (!prev || seen.has(k)) continue;
+    seen.add(k);
+    const qty = (xs: { qty?: number }[]) => xs.reduce((a, x) => a + (x.qty ?? 0), 0);
+    const now = added.filter((x) => key(x) === k);
+    out.push(
+      `${t.date} ${t.symbol} ${TRADE_LABEL[t.type]}：原本已有 ${prev.length} 筆共 ${qty(prev)} 股，這次又加入 ${now.length} 筆共 ${qty(now)} 股。若是同一筆成交重複了，請到「交易帳」刪掉其中一份。`,
+    );
+  }
+  return out;
 }
 
 function txnKey(t: Omit<Txn, 'id'>): string {
@@ -51,7 +76,9 @@ export function mergeBatch(store: Store, batch: ImportBatch, now = new Date().to
   let added = 0;
   let skipped = 0;
 
+  const before = s.txns.length;
   const tx = mergeTxns(s.txns, batch.txns);
+  const warnings = possibleDuplicates(s.txns, tx.txns.slice(before).filter((t) => TRADE_LABEL[t.type] && t.symbol));
   s.txns = tx.txns;
   added += tx.added;
   skipped += tx.skipped;
@@ -110,5 +137,5 @@ export function mergeBatch(store: Store, batch: ImportBatch, now = new Date().to
   }
 
   s.imports.push({ at: now, file: batch.file, kind: batch.kind, added, skipped });
-  return { store: s, added, skipped };
+  return { store: s, added, skipped, warnings };
 }

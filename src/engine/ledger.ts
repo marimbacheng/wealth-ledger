@@ -58,6 +58,8 @@ interface OpenBuy {
 
 export interface LedgerResult {
   anchor?: PositionSnapshot;
+  // 錨點是第一筆遷移賣出當天、賣出前匯出的快照：當天的遷移賣出（與其已實現報表）在錨點之後
+  anchorPreSale: boolean;
   schwab: Record<string, Pool>;
   tw: Record<string, Pool>;
   continuous: Record<string, Pool>;
@@ -73,7 +75,7 @@ export interface LedgerResult {
 
 const TRADE = new Set(['BUY', 'SELL', 'OPEN']);
 // 只有交易紀錄類來源會動到現金；投資收益檔的股利與交易紀錄重複，不能再加一次
-const CASH_SOURCES = new Set(['schwab-transactions', 'tw-csv', 'manual']);
+const CASH_SOURCES = new Set(['schwab-transactions', 'tw-csv', 'sinopac-statement', 'manual']);
 
 function pool(m: Record<string, Pool>, s: string): Pool {
   return (m[s] ??= { qty: 0, cost: 0 });
@@ -96,14 +98,25 @@ function sellFromPool(p: Pool, qty: number): number {
 // 延續帳的錨點：第一筆「遷移賣出」之前的最後一份 Schwab 持倉快照。
 // 用實際賣出日而不是遷移區間起日：區間可以提早開始（涵蓋先匯出的款項），錨點仍會是最新的賣出前快照。
 // 這也避開「快照當天稍晚又有交易」的問題：只要賣出前一天再匯出一次持倉，就以那份為準。
-export function pickAnchor(store: Store): PositionSnapshot | undefined {
+// 賣出當天的快照若仍持有當天賣出的全部股數，表示是賣出前匯出的（例如中午匯出、收盤前賣），也可以當錨點；
+// 這時當天的遷移賣出接在快照之後重播，當天其他 Schwab 交易視為已反映在快照裡。
+function migrationSells(store: Store): Txn[] {
   const m = store.settings.migration;
-  const firstMigrationSell = store.txns
-    .filter((t) => t.broker === 'schwab' && t.type === 'SELL' && inRange(t.date, m.schwabSellFrom, m.schwabSellTo))
-    .map((t) => t.date)
-    .sort()[0];
+  return store.txns.filter((t) => t.broker === 'schwab' && t.type === 'SELL' && inRange(t.date, m.schwabSellFrom, m.schwabSellTo));
+}
+
+function holdsAllSold(s: PositionSnapshot, sells: Txn[]): boolean {
+  const sold = new Map<string, number>();
+  for (const t of sells) if (t.symbol) sold.set(t.symbol, (sold.get(t.symbol) ?? 0) + (t.qty ?? 0));
+  return [...sold].every(([sym, q]) => (s.rows.find((r) => r.symbol === sym)?.qty ?? 0) >= q - 1e-3);
+}
+
+export function pickAnchor(store: Store): PositionSnapshot | undefined {
+  const sells = migrationSells(store);
+  const first = sells.map((t) => t.date).sort()[0];
   const schwab = store.snapshots.filter((s) => s.broker === 'schwab').sort((a, b) => a.date.localeCompare(b.date));
-  const before = firstMigrationSell ? schwab.filter((s) => s.date < firstMigrationSell) : schwab;
+  const firstDay = sells.filter((t) => t.date === first);
+  const before = first ? schwab.filter((s) => s.date < first || (s.date === first && holdsAllSold(s, firstDay))) : schwab;
   return before[before.length - 1] ?? schwab[0];
 }
 
@@ -119,6 +132,7 @@ export function computeLedgers(store: Store, asOf: string): LedgerResult {
   const anchorDate = anchor?.date ?? '0000-00-00';
   const res: LedgerResult = {
     anchor,
+    anchorPreSale: false,
     schwab: {},
     tw: {},
     continuous: {},
@@ -219,8 +233,13 @@ export function computeLedgers(store: Store, asOf: string): LedgerResult {
     .sort((a, b) => a.t.date.localeCompare(b.t.date) || orderKey(a.t) - orderKey(b.t) || a.i - b.i)
     .map((x) => x.t);
 
+  // 錨點是賣出當天、賣出前的快照時，當天的遷移賣出還沒反映在快照裡
+  const sells = migrationSells(store);
+  res.anchorPreSale = !!anchor && sells.map((x) => x.date).sort()[0] === anchorDate;
+  const sameDaySells = new Set(res.anchorPreSale ? sells.filter((x) => x.date === anchorDate) : []);
+
   for (const t of txns) {
-    const afterAnchor = t.broker === 'tw' || t.date > anchorDate;
+    const afterAnchor = t.broker === 'tw' || t.date > anchorDate || sameDaySells.has(t);
 
     if (t.drip && t.symbol && t.qty) {
       const d = (res.drip[t.symbol] ??= { qty: 0, cost: 0, count: 0 });

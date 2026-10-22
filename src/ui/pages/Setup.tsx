@@ -93,8 +93,8 @@ export function Setup({ store, report: r, update, importFiles, sync, fx }: PageP
             tabIndex={0}
             onKeyDown={(e) => e.key === 'Enter' && fileRef.current?.click()}
           >
-            把 CSV 拖到這裡，或點一下選擇檔案
-            <input ref={fileRef} type="file" accept=".csv,.CSV,text/csv" multiple hidden onChange={(e) => (onFiles(e.target.files), (e.target.value = ''))} />
+            把 CSV 或 Excel（.xlsx）拖到這裡，或點一下選擇檔案
+            <input ref={fileRef} type="file" accept=".csv,.CSV,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden onChange={(e) => (onFiles(e.target.files), (e.target.value = ''))} />
           </div>
           {results.length > 0 && (
             <div className="table-wrap" style={{ marginTop: 10 }}>

@@ -299,7 +299,7 @@ export function buildReport(store: Store, asOf: string): Report {
   };
   const schwabReported = store.realized.filter((r) => r.broker === 'schwab').map((r) => ({ date: r.closedDate, gain: r.gain }));
   const contEvents = [
-    ...schwabReported.filter((r) => r.date <= anchorDate),
+    ...schwabReported.filter((r) => r.date < anchorDate || (r.date === anchorDate && !led.anchorPreSale)),
     ...led.realized.filter((r) => r.ledger === 'continuous').map((r) => ({ date: r.date, gain: r.gain * k(r.currency) })),
   ];
   const twEvents = led.realized.filter((r) => r.ledger === 'tw').map((r) => ({ date: r.date, gain: r.gain * k(r.currency) }));

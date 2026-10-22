@@ -26,6 +26,7 @@ const SOURCE_LABEL: Record<string, string> = {
   'schwab-transactions': 'Schwab 交易紀錄',
   'schwab-income': 'Schwab 投資收益',
   'tw-csv': '範本匯入',
+  'sinopac-statement': '永豐對帳單',
   manual: '手動',
 };
 

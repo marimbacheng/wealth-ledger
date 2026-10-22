@@ -38,7 +38,7 @@ export interface Txn {
   drip?: boolean; // 股利再投入買進
   netOnly?: boolean; // DIV 只知道稅後金額
   rawAction?: string;
-  source: string; // schwab-transactions | schwab-income | tw-csv | manual
+  source: string; // schwab-transactions | schwab-income | tw-csv | sinopac-statement | manual
   note?: string;
   currency?: Currency; // 沒填時依代號判斷（數字代號為 TWD）
   fx?: number; // 交易當天匯率（1 美元兌多少台幣），台幣交易才需要
