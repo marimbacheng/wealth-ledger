@@ -9,7 +9,7 @@ import { Card, Notice } from '../components';
 import { SyncCard } from '../SyncCard';
 import { FxCard } from '../FxCard';
 import type { FxApi } from '../../fx/useFx';
-import { money, moneyIn, qty, today } from '../format';
+import { money, today } from '../format';
 
 function download(name: string, text: string, type: string) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -180,46 +180,13 @@ export function Setup({ store, report: r, update, importFiles, sync, fx }: PageP
           <p className="desc" style={{ marginTop: 8 }}>
             延續帳起算快照：{r.anchorDate ?? '尚無'}（遷移開始前最後一份 Schwab 持倉）。買回期限過後仍沒配對到的賣出（例如零股），在延續帳視為已實現。期間內從 Schwab 匯出的款項視為券商間移轉，不算提領。
           </p>
-          {r.migration.matches.length > 0 && (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th className="l">代號</th>
-                    <th>股數</th>
-                    <th>原始成本</th>
-                    <th>Schwab 賣出所得</th>
-                    <th>永豐買進成本</th>
-                    <th>延續成本</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.migration.matches.map((x, i) => (
-                    <tr key={i}>
-                      <td className="l">{x.fromSymbol && x.fromSymbol !== x.symbol ? `${x.fromSymbol} → ${x.symbol}` : x.symbol}</td>
-                      <td>{qty(Number(x.qty.toFixed(4)))}</td>
-                      <td>{moneyIn(x.originalCost, x.currency)}</td>
-                      <td>{moneyIn(x.proceeds, x.currency)}</td>
-                      <td>{moneyIn(x.newCost, x.currency)}</td>
-                      <td>{moneyIn(x.carriedCost, x.currency)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          {r.migration.pending.length > 0 && (
-            <Notice
-              title="遷移中（已賣出、尚未買回）"
-              items={r.migration.pending.map((p) => `${p.symbol} ${qty(Number(p.qty.toFixed(4)))} 股，賣出所得 ${moneyIn(p.proceeds, p.currency)}（${p.sellDate}）`)}
-            />
-          )}
+          <p className="desc">每一組配對、接過來的獲利與還沒買回的零股，在「移轉紀錄」頁。</p>
         </Card>
 
-        <Card title="淨投入與預設值" desc="期初累計淨投入 = 這個日期以前，從台灣匯到海外券商（含更早的券商時期）的總金額減去匯出。之後的匯入會從交易紀錄自動加上。">
+        <Card title="報酬起算點與預設值" desc="填一個知道帳戶總值的日期（例如 Schwab 績效報表的 Beginning Value），年化報酬率與「期間賺得」從這天起算。之後的匯入款從交易紀錄自動加上；期初持股（例如原有台股）以記入當天的市值計入。">
           <div className="row">
             <label className="field">
-              截至日期
+              起算日
               <input
                 type="date"
                 value={store.settings.openingContribution?.date ?? ''}
@@ -232,7 +199,7 @@ export function Setup({ store, report: r, update, importFiles, sync, fx }: PageP
               />
             </label>
             <label className="field">
-              累計淨投入（USD）
+              當天帳戶總值（USD）
               <input
                 type="number"
                 step="any"

@@ -9,6 +9,7 @@ import { useFx } from './fx/useFx';
 import { Dividends } from './ui/pages/Dividends';
 import { Holdings } from './ui/pages/Holdings';
 import { Ledger } from './ui/pages/Ledger';
+import { Migration } from './ui/pages/Migration';
 import { Overview } from './ui/pages/Overview';
 import { Setup } from './ui/pages/Setup';
 import { useSync } from './sync/useSync';
@@ -29,12 +30,13 @@ export interface PageProps {
   update: (fn: (s: Store) => Store) => void;
 }
 
-type Tab = 'overview' | 'holdings' | 'dividends' | 'ledger' | 'setup';
+type Tab = 'overview' | 'holdings' | 'dividends' | 'ledger' | 'migration' | 'setup';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: '總覽' },
   { id: 'holdings', label: '持股' },
   { id: 'dividends', label: '股利' },
   { id: 'ledger', label: '交易帳' },
+  { id: 'migration', label: '移轉紀錄' },
   { id: 'setup', label: '匯入與設定' },
 ];
 
@@ -197,6 +199,7 @@ export default function App() {
           {tab === 'holdings' && <Holdings {...props} />}
           {tab === 'dividends' && <Dividends {...props} />}
           {tab === 'ledger' && <Ledger {...props} />}
+          {tab === 'migration' && <Migration {...props} />}
           {tab === 'setup' && <Setup {...props} importFiles={importFiles} sync={sync} fx={fx} />}
         </>
       )}

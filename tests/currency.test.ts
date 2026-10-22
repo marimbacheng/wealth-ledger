@@ -109,16 +109,17 @@ describe('報表換算成美元', () => {
     expect(r.warnings.some((w) => w.includes('永豐台幣現金推算為'))).toBe(true);
   });
 
-  it('期初持股以成本算進淨投入：只有期初持股時，「現值 − 淨投入」等於帳面盈虧', () => {
+  it('期初持股以記入當天的市值算進投入（不是成本），記入前的漲幅不算在起算後的報酬裡', () => {
     const s = emptyStore();
     s.fx = { current: { rate: FX, date: '2026-10-21', source: 't' }, history: { '2026-10-15': FX } };
     s.prices = { '006208': { price: 150, date: '2026-10-22', source: 't' } };
     s.txns = [tx({ broker: 'tw', date: '2026-10-15', type: 'OPEN', symbol: '006208', qty: 50, amount: -5000 })];
     s.settings.openingContribution = { date: '2026-01-01', amount: 0 };
     const tr = buildReport(s, '2026-10-22').totalReturn;
-    expect(tr.netContribution).toBeCloseTo(5000 / FX, 4);
+    expect(tr.netContribution).toBeCloseTo((50 * 150) / FX, 4);
+    expect(tr.gainByContribution).toBeCloseTo(0, 6);
+    // 累積報酬仍從原始成本算
     expect(tr.total).toBeCloseTo((50 * 150 - 5000) / FX, 4);
-    expect(tr.residual).toBeCloseTo(0, 6);
   });
 
   it('台股用近 12 個月實領估股利時，每股股利是台幣、合計只換算一次', () => {

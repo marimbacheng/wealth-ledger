@@ -137,7 +137,7 @@ export function GradientDonut(props: {
   );
 }
 
-// 資產成長：總值與累計淨投入，同一個 USD 軸
+// 資產成長：總值與累計投入，同一個 USD 軸
 export function ValueChart({ data }: { data: { date: string; value: number; contribution?: number }[] }) {
   const hasContrib = data.some((d) => d.contribution != null);
   // 依實際日期等比例排列（資料點間隔不均也不會失真），刻度標年份
@@ -156,7 +156,7 @@ export function ValueChart({ data }: { data: { date: string; value: number; cont
         {hasContrib && (
           <span>
             <i style={{ background: C.s2 }} />
-            累計淨投入
+            累計投入
           </span>
         )}
       </div>
@@ -177,7 +177,7 @@ export function ValueChart({ data }: { data: { date: string; value: number; cont
             <YAxis tick={tick} tickFormatter={compact} stroke={C.axis} width={52} domain={y.domain} ticks={y.ticks} />
             <Tooltip content={<Tip />} cursor={{ stroke: C.muted }} />
             <Line type="monotone" dataKey="value" name="帳戶總值" stroke={C.s1} strokeWidth={2} dot={{ r: 4, fill: C.s1, stroke: 'var(--page)', strokeWidth: 2 }} activeDot={{ r: 5 }} />
-            {hasContrib && <Line type="stepAfter" dataKey="contribution" name="累計淨投入" stroke={C.s2} strokeWidth={2} dot={false} />}
+            {hasContrib && <Line type="stepAfter" dataKey="contribution" name="累計投入" stroke={C.s2} strokeWidth={2} dot={false} />}
           </LineChart>
         </ResponsiveContainer>
       </div>

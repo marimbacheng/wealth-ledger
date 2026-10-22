@@ -338,3 +338,27 @@ describe('資產成長', () => {
     expect(r.valueSeries.find((p) => p.date === '2026-10-19')!.value).toBeCloseTo(1030 + 15000 / 30, 6);
   });
 });
+
+describe('年化報酬率', () => {
+  // 起算日帳戶總值 1000，一年後再投入 1000，兩年後總值 2310：每年 10%（1000×1.1² + 1000×1.1 = 2310）
+  function irrStore(): Store {
+    const s = emptyStore();
+    s.settings.openingContribution = { date: '2024-05-14', amount: 1000 };
+    s.snapshots.push({ id: 'schwab|2026-05-13', broker: 'schwab', date: '2026-05-13', cash: 2310, total: 2310, source: 't', rows: [] });
+    s.txns = [tx({ broker: 'schwab', date: '2025-05-14', type: 'DEPOSIT', amount: 1000 })];
+    return s;
+  }
+
+  it('從起算日總值與之後每筆投入算資金加權年化報酬', () => {
+    const r = buildReport(irrStore(), '2026-05-14');
+    expect(r.totalReturn.since).toBe('2024-05-14');
+    expect(r.totalReturn.netContribution).toBeCloseTo(2000, 6);
+    expect(r.totalReturn.gainByContribution).toBeCloseTo(310, 6);
+    expect(r.totalReturn.xirr!).toBeCloseTo(0.1, 3);
+  });
+
+  it('起算日總值也畫在資產成長圖上，當天的累計投入等於它', () => {
+    const r = buildReport(irrStore(), '2026-05-14');
+    expect(r.valueSeries[0]).toMatchObject({ date: '2024-05-14', value: 1000, contribution: 1000 });
+  });
+});

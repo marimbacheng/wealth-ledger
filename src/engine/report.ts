@@ -95,10 +95,11 @@ export interface Report {
     interest: number;
     fees: number;
     total: number;
-    netContribution?: number;
-    gainByContribution?: number;
-    residual?: number;
-    xirr?: number;
+    // 以下需要設定報酬起算點（日期＋當天帳戶總值）
+    since?: string;
+    netContribution?: number; // 起算日總值 ＋ 之後的淨投入（期初持股以市值計）
+    gainByContribution?: number; // 現值 − 上面的投入
+    xirr?: number; // 資金加權年化報酬率
   };
   sectors: { name: string; value: number; weight: number }[];
   assetClasses: { name: string; value: number; weight: number }[];
@@ -178,9 +179,12 @@ export function buildReport(store: Store, asOf: string): Report {
   const usesTwd = store.txns.some((t) => txnCurrency(t, store.securities) === 'TWD') || Object.keys(store.prices).some((sym) => currencyOf(sym, store.securities) === 'TWD');
   if (usesTwd && !rateNow) warnings.push('尚未取得美元／台幣匯率，台幣部位暫時以 0 計入合計；請到「設定」更新匯率');
   const k = (c: Currency) => (c === 'USD' ? 1 : rateNow ? 1 / rateNow : 0);
-  // 歷史金流（入金、提領、期初持股）用發生當天的匯率；投入為正
+  // 歷史金流（入金、提領、期初持股）用發生當天的匯率；投入為正。
+  // 期初持股以記入當天的市值計入（不是成本）：報酬從起算日開始算，記入前的漲幅不屬於這段期間
+  const priceAt = priceHistory(store);
   const flowUSD = (t: Txn) => {
-    const amt = t.type === 'OPEN' ? Math.abs(t.amount) : t.amount;
+    const px = t.type === 'OPEN' && t.symbol && t.qty ? priceAt(t.symbol, t.date) : undefined;
+    const amt = t.type === 'OPEN' ? (px != null ? px * t.qty! : Math.abs(t.amount)) : t.amount;
     const c = txnCurrency(t, store.securities);
     if (c === 'USD') return amt;
     const r = t.fx ?? rateAt(store, t.date);
@@ -387,9 +391,9 @@ export function buildReport(store: Store, asOf: string): Report {
     sum(flows.filter((t) => t.date <= date && (!opening || t.date > opening.date)).map(flowUSD));
   if (opening) {
     const nc = contribAt(asOf);
+    tr.since = opening.date;
     tr.netContribution = nc;
     tr.gainByContribution = totalValue - nc;
-    tr.residual = tr.gainByContribution - total;
     const xf: Flow[] = [
       { date: opening.date, amount: -opening.amount },
       ...flows.filter((t) => t.date > opening.date).map((t) => ({ date: t.date, amount: -flowUSD(t) })),
@@ -417,7 +421,10 @@ export function buildReport(store: Store, asOf: string): Report {
     const cur = byDate.get(p.date);
     if (!cur || prio[p.source] > prio[cur.source]) byDate.set(p.date, p);
   }
-  const priceAt = priceHistory(store);
+  // 報酬起算日的帳戶總值也是一個資料點（例如 Schwab 績效報表的 Beginning Value）
+  if (opening && opening.date < asOf && !byDate.has(opening.date)) {
+    byDate.set(opening.date, { id: 'opening', date: opening.date, value: opening.amount, source: 'statement', note: '報酬起算日' });
+  }
   const brokerValues = (date: string) => {
     const l = computeLedgers(store, date);
     const r = rateAt(store, date);

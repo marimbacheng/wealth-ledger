@@ -2,7 +2,7 @@ import type { PageProps } from '../../App';
 import { DividendYearChart, GradientDonut, ValueChart } from '../charts';
 import { HOLDING_RAMP, SECTOR_RAMP } from '../color';
 import { Gain, Kpi, Leaders, Notice, Section, TotalsBadge } from '../components';
-import { brokerCostName, costGapNote, schwabHolds } from '../costTerms';
+import { brokerCostName, schwabHolds } from '../costTerms';
 import { money, pct, tone } from '../format';
 
 export function Overview({ report: r, store }: PageProps) {
@@ -14,7 +14,7 @@ export function Overview({ report: r, store }: PageProps) {
   const B = brokerCostName(holds);
   const lastYear = r.dividends.byYear[r.dividends.byYear.length - 1];
   const priceDates = [...new Set(r.holdings.map((h) => h.priceDate).filter(Boolean))].sort();
-  const costGap = t.contCost - t.brokerCost;
+  const fullYear = !!tr.since && (Date.parse(r.asOf) - Date.parse(tr.since)) / 864e5 >= 365;
 
   return (
     <>
@@ -38,18 +38,23 @@ export function Overview({ report: r, store }: PageProps) {
           </div>
           <div className="stack">
             <Kpi label="目前總值" value={money(t.totalValue)} foot={`持股 ${money(t.marketValue)}　現金 ${money(t.schwabCash + t.twCash)}`} />
-            {tr.netContribution != null ? (
-              <Leaders
-                rows={[
-                  { k: '累計淨投入', v: money(tr.netContribution) },
-                  { k: '現值 − 淨投入', v: money(tr.gainByContribution, { sign: true }), cls: tone(tr.gainByContribution) },
-                  { k: '年化報酬（XIRR）', v: pct(tr.xirr) },
-                  { k: '未歸因差額', v: money(tr.residual, { sign: true }), cls: 'muted' },
-                ]}
-              />
+            {tr.since && tr.netContribution != null ? (
+              <>
+                <Kpi
+                  label={`年化報酬率・${tr.since} 起`}
+                  value={fullYear ? pct(tr.xirr) : '—'}
+                  foot={fullYear ? '資金加權（考慮每筆投入的時間點），已扣股利預扣稅' : '起算未滿一年，年化沒有意義；先看下方的期間賺得'}
+                />
+                <Leaders
+                  rows={[
+                    { k: '起算日總值＋之後投入', v: money(tr.netContribution) },
+                    { k: '期間賺得（現值 − 投入）', v: money(tr.gainByContribution, { sign: true }), cls: tone(tr.gainByContribution) },
+                  ]}
+                />
+              </>
             ) : (
               <p className="muted" style={{ fontSize: 12, margin: 0 }}>
-                到「設定」填入期初累計淨投入，這裡會加上「現值 − 淨投入」與年化報酬率（XIRR）。
+                到「匯入與設定」填入報酬起算點（日期與當天的帳戶總值，例如 Schwab 績效報表的 Beginning Value），這裡會顯示年化報酬率。
               </p>
             )}
             <Kpi label={`未來 12 個月預估股息・稅後（${r.forecast.label}）`} value={money(r.forecast.net)} foot={`稅前 ${money(r.forecast.gross)}，預扣 ${money(r.forecast.tax)}`} />
@@ -57,8 +62,8 @@ export function Overview({ report: r, store }: PageProps) {
         </div>
       </Section>
 
-      <Section no="02" title="成本" aside={`${B}拿來報稅與對帳；延續成本拿來看從第一次買進到現在的報酬`}>
-        <div className="grid">
+      <Section no="02" title="成本" aside={`${B}拿來報稅與對帳；延續成本拿來看從第一次買進到現在的報酬；兩者的差異見「移轉紀錄」`}>
+        <div className="grid two">
           <div>
             <div className="eyebrow">{holds ? '券商成本・兩家券商帳上' : '永豐成本・永豐帳上'}</div>
             <Leaders
@@ -85,18 +90,6 @@ export function Overview({ report: r, store }: PageProps) {
                 { k: '成本殖利率・稅後', v: pct(r.yoc.contNet) },
               ]}
             />
-          </div>
-          <div>
-            <div className="eyebrow">差異</div>
-            <Leaders
-              rows={[
-                { k: `延續成本 − ${B}`, v: money(costGap, { sign: true }) },
-                { k: '遷移配對筆數', v: String(r.migration.matches.length) },
-              ]}
-            />
-            <p className="muted" style={{ fontSize: 12 }}>
-              {costGapNote(holds)}
-            </p>
           </div>
         </div>
       </Section>
